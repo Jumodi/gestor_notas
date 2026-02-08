@@ -642,16 +642,16 @@ class GestorNotasApp(CTk):
         header_info.pack(fill="x", padx=5, pady=5)
         
         CTkLabel(header_info, 
-                text=f"📝 Evaluación: {eval_nombre} ({eval_porcentaje}%) - Las notas se guardan automáticamente", 
+                text=f"📝 Evaluación: {eval_nombre} ({eval_porcentaje}%) - Guardado automático", 
                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=5)
         
+        # Header simplificado
         header = CTkFrame(self.scroll_frame)
         header.pack(fill="x", padx=5, pady=2)
         
-        CTkLabel(header, text="Estudiante", font=ctk.CTkFont(weight="bold"), width=300).pack(side="left", padx=10)
-        CTkLabel(header, text="Nota", font=ctk.CTkFont(weight="bold"), width=80).pack(side="left", padx=10)
-        CTkLabel(header, text="Observaciones", font=ctk.CTkFont(weight="bold"), width=250).pack(side="left", padx=10)
-        CTkLabel(header, text="Estado", font=ctk.CTkFont(weight="bold"), width=80).pack(side="left", padx=10)
+        CTkLabel(header, text="Estudiante", font=ctk.CTkFont(weight="bold"), width=350).pack(side="left", padx=10)
+        CTkLabel(header, text="Nota", font=ctk.CTkFont(weight="bold"), width=150).pack(side="left", padx=10)
+        CTkLabel(header, text="Observaciones", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10, fill="x", expand=True)
         
         for est in estudiantes:
             est_id, nombre, grupo, email = est
@@ -659,43 +659,47 @@ class GestorNotasApp(CTk):
             row = CTkFrame(self.scroll_frame)
             row.pack(fill="x", padx=5, pady=2)
             
+            # Nombre del estudiante
             nombre_text = f"{nombre}" + (f" (G{grupo})" if grupo > 1 else "")
-            CTkLabel(row, text=nombre_text, width=300).pack(side="left", padx=10)
+            CTkLabel(row, text=nombre_text, width=350).pack(side="left", padx=10)
             
+            # Obtener datos existentes
             nota_existente, obs_existente = self.db.get_nota(est_id, self.current_evaluacion)
             
-            # Frame para nota + estado
+            # Frame para nota + ícono de estado (juntos)
             nota_frame = CTkFrame(row, fg_color="transparent")
             nota_frame.pack(side="left", padx=5)
             
+            # Entry de nota
             nota_var = ctk.StringVar(value=str(nota_existente) if nota_existente is not None else "")
             entry_nota = CTkEntry(nota_frame, width=80, textvariable=nota_var, justify="center", 
                                  placeholder_text="0-100")
-            entry_nota.pack()
+            entry_nota.pack(side="left")
             
-            # Label de estado (guardado/pendiente)
-            estado_label = CTkLabel(nota_frame, text="💾" if nota_existente else "○", width=20)
-            estado_label.pack()
+            # Ícono de estado al lado de la nota
+            estado_text = "✓" if nota_existente else "○"
+            estado_color = "green" if nota_existente else "gray"
+            estado_label = CTkLabel(nota_frame, text=estado_text, width=25, text_color=estado_color)
+            estado_label.pack(side="left", padx=(5, 0))
             
+            # Entry de observaciones (barra única)
             obs_var = ctk.StringVar(value=obs_existente or "")
-            entry_obs = CTkEntry(row, width=250, textvariable=obs_var, 
-                                placeholder_text="Opcional...")
-            entry_obs.pack(side="left", padx=5, fill="x", expand=True)
+            entry_obs = CTkEntry(row, textvariable=obs_var, 
+                                placeholder_text="Observaciones...")
+            entry_obs.pack(side="left", padx=10, fill="x", expand=True)
             
-            # GUARDAR AL PERDER FOCO (FocusOut)
+            # Eventos de guardado automático
             def guardar_al_salir(event, eid=est_id, nv=nota_var, ov=obs_var, el=estado_label):
                 self.guardar_nota_auto(eid, nv, ov, el)
             
             entry_nota.bind("<FocusOut>", guardar_al_salir)
             entry_obs.bind("<FocusOut>", guardar_al_salir)
-            
-            # También guardar al presionar Enter
             entry_nota.bind("<Return>", guardar_al_salir)
             entry_obs.bind("<Return>", guardar_al_salir)
             
             self.entries_notas[est_id] = (nota_var, obs_var, estado_label)
         
-        self.status_label.configure(text=f"📊 {len(estudiantes)} estudiantes cargados - Guardado automático activo")
+        self.status_label.configure(text=f"📊 {len(estudiantes)} estudiantes - Guardado automático activo")
     
     def guardar_nota_individual(self, estudiante_id, nota_var, obs_var):
         try:
@@ -719,32 +723,30 @@ class GestorNotasApp(CTk):
         try:
             nota_str = nota_var.get().strip()
             
-            # Si está vacío, no guardar nada (o eliminar nota existente)
+            # Si está vacío, mostrar como pendiente
             if not nota_str:
-                # Opcional: eliminar nota si existe
-                # self.db.guardar_nota(estudiante_id, self.current_evaluacion, None, obs_var.get())
-                estado_label.configure(text="○")
+                estado_label.configure(text="○", text_color="gray")
                 return
             
             nota = float(nota_str)
             if not 0 <= nota <= 100:
                 estado_label.configure(text="❌", text_color="red")
+                self.status_label.configure(text="❌ Nota debe ser entre 0-100", text_color="red")
                 return
             
             # Guardar en base de datos
             self.db.guardar_nota(estudiante_id, self.current_evaluacion, nota, obs_var.get())
             
-            # Mostrar indicador de guardado
+            # Mostrar guardado exitoso
             estado_label.configure(text="✓", text_color="green")
-            self.status_label.configure(text=f"✅ Nota guardada automáticamente")
+            self.status_label.configure(text=f"✅ Nota guardada", text_color="green")
             
-            # Actualizar resumen en segundo plano
+            # Actualizar resumen
             self.after(100, self.actualizar_resumen)
             
         except ValueError:
-            # No es un número válido
             estado_label.configure(text="❌", text_color="red")
-            self.status_label.configure(text="❌ Error: Nota debe ser número entre 0-100")
+            self.status_label.configure(text="❌ Error: Ingresa un número válido", text_color="red")
     
     def guardar_todas_notas(self):
         if not self.entries_notas:
