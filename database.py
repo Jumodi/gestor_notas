@@ -3,7 +3,9 @@ import os
 from datetime import datetime
 
 class DatabaseManager:
-    def __init__(self, db_path="data/notas.db"):
+    def __init__(self, db_path=None):
+        if db_path is None:
+         db_path = os.path.join("data", "notas.db")
         self.db_path = db_path
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.init_database()

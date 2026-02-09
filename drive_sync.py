@@ -9,7 +9,11 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 class GoogleDriveSync:
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     
-    def __init__(self, credentials_path='credentials.json', token_path='token.json'):
+    def __init__(self, credentials_path=None, token_path=None):
+        if credentials_path is None:
+            credentials_path = 'credentials.json'
+        if token_path is None:
+            token_path = 'token.json'
         self.credentials_path = credentials_path
         self.token_path = token_path
         self.service = None

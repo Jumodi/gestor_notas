@@ -6,6 +6,10 @@ from database import DatabaseManager
 from drive_sync import GoogleDriveSync
 import os
 import threading
+import platform
+
+# Detectar sistema operativo
+SISTEMA = platform.system()
 
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
@@ -33,7 +37,7 @@ class GestorNotasApp(CTk):
         self.setup_ui()
         self.load_cursos()
     
-    # ========== FUNCIONES DE CURSOS (antes de setup_ui) ==========
+    # ========== FUNCIONES DE CURSOS  ==========
     
     def crear_curso(self):
         dialog = CTkInputDialog(text="Nombre del nuevo curso:", title="Crear Curso")
@@ -840,7 +844,7 @@ Para configurar Google Drive:
             import webbrowser
             webbrowser.open("https://console.cloud.google.com/")
     
-    # ========== SETUP_UI AL FINAL ==========
+    # ========== SETUP_UI ==========
     
     def setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
@@ -856,7 +860,7 @@ Para configurar Google Drive:
                                    font=ctk.CTkFont(size=20, weight="bold"))
         self.title_label.grid(row=0, column=0, padx=20, pady=(20, 10))
         
-        # Gestión de Cursos - AHORA CON BOTONES
+        # Gestión de Cursos 
         self.cursos_frame = CTkFrame(self.sidebar)
         self.cursos_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
         
@@ -876,7 +880,7 @@ Para configurar Google Drive:
         CTkButton(btn_frame, text="❌", width=50, 
                  command=self.eliminar_curso, fg_color="red", hover_color="darkred").pack(side="left", padx=2)
         
-        # Gestión de Evaluaciones - AHORA CON BOTONES
+        # Gestión de Evaluaciones
         self.evals_frame = CTkFrame(self.sidebar)
         self.evals_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
         
