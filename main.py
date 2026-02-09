@@ -24,168 +24,16 @@ class GestorNotasApp(CTk):
         self.current_evaluacion = None
         self.entries_notas = {}
         
+        # Inicializar variables de botones
+        self.curso_buttons = {}
+        self.eval_buttons = {}
+        self.cursos_data = {}
+        self.evals_data = {}
+        
         self.setup_ui()
         self.load_cursos()
     
-    def setup_ui(self):
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        
-        # ========== SIDEBAR ==========
-        self.sidebar = CTkFrame(self, width=300, corner_radius=0)
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(6, weight=1)
-        
-        # Título
-        self.title_label = CTkLabel(self.sidebar, text="📚 Gestor de Notas", 
-                                   font=ctk.CTkFont(size=20, weight="bold"))
-        self.title_label.grid(row=0, column=0, padx=20, pady=(20, 10))
-        
-        # Gestión de Cursos
-        self.cursos_frame = CTkFrame(self.sidebar)
-        self.cursos_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
-        
-        CTkLabel(self.cursos_frame, text="Cursos", font=ctk.CTkFont(weight="bold")).pack(pady=5)
-        
-        self.curso_var = ctk.StringVar(value="Selecciona un curso...")
-        self.curso_menu = CTkOptionMenu(self.cursos_frame, values=[], 
-                                       command=self.on_curso_selected,
-                                       variable=self.curso_var, width=250)
-        self.curso_menu.pack(pady=5, padx=10)
-        
-        btn_frame = CTkFrame(self.cursos_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=10)
-        
-        CTkButton(btn_frame, text="➕ Nuevo", width=80, command=self.crear_curso).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="✏️ Editar", width=80, command=self.editar_curso).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="❌", width=50, command=self.eliminar_curso, fg_color="red", hover_color="darkred").pack(side="left", padx=2)
-        
-        # Gestión de Evaluaciones
-        self.evals_frame = CTkFrame(self.sidebar)
-        self.evals_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
-        
-        CTkLabel(self.evals_frame, text="Evaluaciones", font=ctk.CTkFont(weight="bold")).pack(pady=5)
-        
-        self.eval_var = ctk.StringVar(value="Selecciona evaluación...")
-        self.eval_menu = CTkOptionMenu(self.evals_frame, values=[], 
-                                      command=self.on_eval_selected,
-                                      variable=self.eval_var, width=250)
-        self.eval_menu.pack(pady=5, padx=10)
-        
-        btn_frame = CTkFrame(self.evals_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=10)
-        
-        CTkButton(btn_frame, text="➕ Nuevo", width=80, command=self.agregar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="✏️ Editar", width=80, command=self.editar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="❌", width=50, command=self.eliminar_evaluacion, fg_color="orange", hover_color="darkorange").pack(side="left", padx=2)
-        
-        # Gestión de Estudiantes
-        self.est_frame = CTkFrame(self.sidebar)
-        self.est_frame.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
-        
-        CTkLabel(self.est_frame, text="Estudiantes", font=ctk.CTkFont(weight="bold")).pack(pady=5)
-        
-        CTkButton(self.est_frame, text="➕ Agregar Estudiante", 
-                 command=self.agregar_estudiante).pack(pady=2, fill="x", padx=10)
-        CTkButton(self.est_frame, text="➕ Agregar Varios", 
-                 command=self.agregar_varios_estudiantes).pack(pady=2, fill="x", padx=10)
-        
-        btn_frame = CTkFrame(self.est_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=10, pady=2)
-        
-        CTkButton(btn_frame, text="✏️ Editar", command=self.editar_estudiante).pack(side="left", fill="x", expand=True, padx=2)
-        CTkButton(btn_frame, text="❌ Eliminar", command=self.eliminar_estudiante, fg_color="red", hover_color="darkred").pack(side="left", fill="x", expand=True, padx=2)
-        
-        # Herramientas
-        self.tools_frame = CTkFrame(self.sidebar)
-        self.tools_frame.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
-        
-        CTkLabel(self.tools_frame, text="Herramientas", font=ctk.CTkFont(weight="bold")).pack(pady=5)
-        
-        CTkButton(self.tools_frame, text="📊 Exportar a Excel", 
-                 command=self.exportar_excel).pack(pady=2, fill="x", padx=10)
-        CTkButton(self.tools_frame, text="☁️ Sincronizar Drive", 
-                 command=self.sincronizar_drive, fg_color="green", hover_color="darkgreen").pack(pady=2, fill="x", padx=10)
-        CTkButton(self.tools_frame, text="⚙️ Configurar Drive", 
-                 command=self.configurar_drive).pack(pady=2, fill="x", padx=10)
-        
-        # Status
-        self.status_label = CTkLabel(self.sidebar, text="Estado: Listo", 
-                                    font=ctk.CTkFont(size=12))
-        self.status_label.grid(row=5, column=0, padx=20, pady=20, sticky="s")
-        
-        # ========== ÁREA PRINCIPAL ==========
-        self.main_frame = CTkFrame(self)
-        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-        self.main_frame.grid_columnconfigure(0, weight=1)
-        self.main_frame.grid_rowconfigure(0, weight=1)
-        
-        self.tabview = CTkTabview(self.main_frame)
-        self.tabview.grid(row=0, column=0, sticky="nsew")
-        
-        self.tab_notas = self.tabview.add("Registro de Notas")
-        self.tab_config = self.tabview.add("Configuración del Curso")
-        self.tab_resumen = self.tabview.add("Resumen y Estadísticas")
-        
-        self.setup_tab_notas()
-        self.setup_tab_config()
-        self.setup_tab_resumen()
-    
-    def setup_tab_notas(self):
-        self.tab_notas.grid_columnconfigure(0, weight=1)
-        self.tab_notas.grid_rowconfigure(1, weight=1)
-        
-        self.info_frame = CTkFrame(self.tab_notas)
-        self.info_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
-        
-        self.info_label = CTkLabel(self.info_frame, text="Selecciona un curso y evaluación para comenzar", 
-                                  font=ctk.CTkFont(size=14, weight="bold"))
-        self.info_label.pack(pady=10)
-        
-        self.scroll_frame = CTkScrollableFrame(self.tab_notas, label_text="Lista de Estudiantes")
-        self.scroll_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
-        self.scroll_frame.grid_columnconfigure(0, weight=1)
-        
-        self.btn_refrescar = CTkButton(self.tab_notas, text="🔄 Refrescar Datos", 
-                                      command=self.refrescar_vista,
-                                      height=40, font=ctk.CTkFont(size=14))
-        self.btn_refrescar.grid(row=2, column=0, pady=10)
-    
-    def setup_tab_config(self):
-        self.tab_config.grid_columnconfigure(0, weight=1)
-        self.tab_config.grid_rowconfigure(0, weight=1)
-        
-        self.config_text = ctk.CTkTextbox(self.tab_config, wrap="word", font=ctk.CTkFont(size=12))
-        self.config_text.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        self.config_text.insert("0.0", "Aquí se mostrará la configuración del curso seleccionado...")
-        self.config_text.configure(state="disabled")
-    
-    def setup_tab_resumen(self):
-        self.tab_resumen.grid_columnconfigure(0, weight=1)
-        self.tab_resumen.grid_rowconfigure(0, weight=1)
-        
-        self.resumen_text = ctk.CTkTextbox(self.tab_resumen, wrap="word", font=ctk.CTkFont(size=12))
-        self.resumen_text.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        self.resumen_text.insert("0.0", "Selecciona un curso para ver estadísticas...")
-        self.resumen_text.configure(state="disabled")
-
-    def refrescar_vista(self):
-        """Recarga la vista actual"""
-        if self.current_evaluacion:
-            self.load_estudiantes_notas()
-            self.status_label.configure(text="🔄 Vista actualizada")    
-    
-    # ========== GESTIÓN DE CURSOS ==========
-    
-    def load_cursos(self):
-        cursos = self.db.get_cursos()
-        if cursos:
-            nombres = [f"{c[1]} ({c[3]} est, {c[4]} eval)" for c in cursos]
-            self.cursos_data = {c[1]: c[0] for c in cursos}
-            self.curso_menu.configure(values=nombres)
-        else:
-            self.curso_menu.configure(values=["No hay cursos - Crea uno nuevo"])
-            self.cursos_data = {}
+    # ========== FUNCIONES DE CURSOS (antes de setup_ui) ==========
     
     def crear_curso(self):
         dialog = CTkInputDialog(text="Nombre del nuevo curso:", title="Crear Curso")
@@ -201,13 +49,56 @@ class GestorNotasApp(CTk):
             if curso_id:
                 messagebox.showinfo("Éxito", f"Curso '{nombre}' creado correctamente.\n\nAhora agrega evaluaciones y estudiantes.")
                 self.load_cursos()
-                for nombre_menu in self.curso_menu.cget("values"):
-                    if nombre in nombre_menu:
-                        self.curso_var.set(nombre_menu)
-                        self.on_curso_selected(nombre_menu)
-                        break
             else:
                 messagebox.showerror("Error", error or "No se pudo crear el curso")
+    
+    def seleccionar_curso(self, nombre_curso):
+        """Selecciona un curso y actualiza la interfaz"""
+        for nombre, btn in self.curso_buttons.items():
+            btn.configure(fg_color="transparent", border_color="gray")
+        
+        if nombre_curso in self.curso_buttons:
+            self.curso_buttons[nombre_curso].configure(fg_color="blue", border_color="blue")
+        
+        self.current_curso = self.cursos_data.get(nombre_curso)
+        
+        if self.current_curso:
+            self.load_evaluaciones()
+            self.actualizar_info_curso()
+            self.actualizar_config_curso()
+            self.actualizar_resumen()
+    
+    def load_cursos(self):
+        for widget in self.cursos_scroll.winfo_children():
+            widget.destroy()
+        
+        cursos = self.db.get_cursos()
+        self.cursos_data = {}
+        self.curso_buttons = {}
+        
+        if cursos:
+            for curso in cursos:
+                curso_id, nombre, descripcion, total_est, total_eval = curso
+                self.cursos_data[nombre] = curso_id
+                
+                btn_text = f"{nombre}\n({total_est} est, {total_eval} eval)"
+                btn = CTkButton(
+                    self.cursos_scroll,
+                    text=btn_text,
+                    command=lambda n=nombre: self.seleccionar_curso(n),
+                    fg_color="transparent",
+                    border_width=2,
+                    border_color="gray",
+                    hover_color="gray25",
+                    anchor="w"
+                )
+                btn.pack(fill="x", pady=2, padx=5)
+                self.curso_buttons[nombre] = btn
+            
+            self.seleccionar_curso(cursos[0][1])
+        else:
+            CTkLabel(self.cursos_scroll, text="No hay cursos").pack(pady=10)
+            self.current_curso = None
     
     def editar_curso(self):
         if not self.current_curso:
@@ -233,10 +124,6 @@ class GestorNotasApp(CTk):
             if success:
                 messagebox.showinfo("Éxito", "Curso actualizado correctamente")
                 self.load_cursos()
-                for nombre_menu in self.curso_menu.cget("values"):
-                    if nuevo_nombre in nombre_menu:
-                        self.curso_var.set(nombre_menu)
-                        break
             else:
                 messagebox.showerror("Error", error or "No se pudo actualizar")
     
@@ -245,7 +132,12 @@ class GestorNotasApp(CTk):
             messagebox.showwarning("Advertencia", "Selecciona un curso primero")
             return
         
-        curso_nombre = self.curso_var.get().split(" (")[0]
+        # Obtener nombre del curso seleccionado
+        curso_nombre = None
+        for nombre, cid in self.cursos_data.items():
+            if cid == self.current_curso:
+                curso_nombre = nombre
+                break
         
         if messagebox.askyesno("Confirmar", f"¿Eliminar permanentemente el curso '{curso_nombre}'?\n\nSe perderán TODOS los datos (evaluaciones, estudiantes y notas)."):
             success, error = self.db.eliminar_curso(self.current_curso)
@@ -258,45 +150,57 @@ class GestorNotasApp(CTk):
             else:
                 messagebox.showerror("Error", error or "No se pudo eliminar el curso")
     
-    def on_curso_selected(self, curso_nombre):
-        if "No hay cursos" in curso_nombre:
-            return
-        
-        if " (" in curso_nombre:
-            nombre_real = curso_nombre.split(" (")[0]
-        else:
-            nombre_real = curso_nombre
-            
-        self.current_curso = self.cursos_data.get(nombre_real)
-        
-        if self.current_curso:
-            self.load_evaluaciones()
-            self.actualizar_info_curso()
-            self.actualizar_config_curso()
-            self.actualizar_resumen()
+    # ========== FUNCIONES DE EVALUACIONES ==========
     
-    # ========== GESTIÓN DE EVALUACIONES ==========
+    def seleccionar_evaluacion(self, nombre_eval):
+        """Selecciona una evaluación y actualiza la interfaz"""
+        for nombre, btn in self.eval_buttons.items():
+            btn.configure(fg_color="transparent", border_color="gray")
+        
+        if nombre_eval in self.eval_buttons:
+            self.eval_buttons[nombre_eval].configure(fg_color="green", border_color="green")
+        
+        self.current_evaluacion = self.evals_data.get(nombre_eval)
+        
+        if self.current_evaluacion:
+            self.load_estudiantes_notas()
+        else:
+            self.limpiar_tab_notas()
     
     def load_evaluaciones(self):
         if not self.current_curso:
             return
         
+        for widget in self.evals_scroll.winfo_children():
+            widget.destroy()
+        
         evals = self.db.get_evaluaciones(self.current_curso)
+        self.evals_data = {}
+        self.eval_buttons = {}
         
         if evals:
-            self.evals_data = {}
-            nombres_evals = []
-            for e in evals:
-                nombre_con_pct = f"{e[1]} ({e[2]}%)"
-                self.evals_data[e[1]] = e[0]
-                nombres_evals.append(nombre_con_pct)
+            for eval in evals:
+                eval_id, nombre, porcentaje, orden, fecha = eval
+                self.evals_data[nombre] = eval_id
+                
+                btn_text = f"{nombre} ({porcentaje}%)"
+                btn = CTkButton(
+                    self.evals_scroll,
+                    text=btn_text,
+                    command=lambda n=nombre: self.seleccionar_evaluacion(n),
+                    fg_color="transparent",
+                    border_width=2,
+                    border_color="gray",
+                    hover_color="gray25",
+                    anchor="w",
+                    height=30
+                )
+                btn.pack(fill="x", pady=2, padx=5)
+                self.eval_buttons[nombre] = btn
             
-            self.eval_menu.configure(values=nombres_evals)
-            self.eval_var.set(nombres_evals[0])
-            self.on_eval_selected(nombres_evals[0])
+            self.seleccionar_evaluacion(evals[0][1])
         else:
-            self.eval_menu.configure(values=["Sin evaluaciones - Agrega una"])
-            self.evals_data = {}
+            CTkLabel(self.evals_scroll, text="Sin evaluaciones").pack(pady=10)
             self.current_evaluacion = None
             self.limpiar_tab_notas()
     
@@ -385,7 +289,12 @@ class GestorNotasApp(CTk):
             messagebox.showwarning("Advertencia", "Selecciona una evaluación primero")
             return
         
-        eval_nombre = self.eval_var.get().split(" (")[0]
+        # Obtener nombre de la evaluación seleccionada
+        eval_nombre = None
+        for nombre, eid in self.evals_data.items():
+            if eid == self.current_evaluacion:
+                eval_nombre = nombre
+                break
         
         if messagebox.askyesno("Confirmar", f"¿Eliminar la evaluación '{eval_nombre}'?\n\nSe perderán las notas asociadas."):
             success, error = self.db.eliminar_evaluacion(self.current_evaluacion)
@@ -396,25 +305,7 @@ class GestorNotasApp(CTk):
             else:
                 messagebox.showerror("Error", error or "No se pudo eliminar")
     
-    def on_eval_selected(self, eval_nombre):
-        if "Sin evaluaciones" in eval_nombre or "Selecciona" in eval_nombre:
-            self.current_evaluacion = None
-            self.limpiar_tab_notas()
-            return
-        
-        if " (" in eval_nombre:
-            nombre_real = eval_nombre.split(" (")[0]
-        else:
-            nombre_real = eval_nombre
-        
-        self.current_evaluacion = self.evals_data.get(nombre_real)
-        
-        if self.current_evaluacion:
-            self.load_estudiantes_notas()
-        else:
-            self.limpiar_tab_notas()
-    
-    # ========== GESTIÓN DE ESTUDIANTES ==========
+    # ========== FUNCIONES DE ESTUDIANTES ==========
     
     def agregar_estudiante(self):
         if not self.current_curso:
@@ -645,7 +536,6 @@ class GestorNotasApp(CTk):
                 text=f"📝 Evaluación: {eval_nombre} ({eval_porcentaje}%) - Guardado automático", 
                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=5)
         
-        # Header simplificado
         header = CTkFrame(self.scroll_frame)
         header.pack(fill="x", padx=5, pady=2)
         
@@ -659,36 +549,29 @@ class GestorNotasApp(CTk):
             row = CTkFrame(self.scroll_frame)
             row.pack(fill="x", padx=5, pady=2)
             
-            # Nombre del estudiante
             nombre_text = f"{nombre}" + (f" (G{grupo})" if grupo > 1 else "")
             CTkLabel(row, text=nombre_text, width=350).pack(side="left", padx=10)
             
-            # Obtener datos existentes
             nota_existente, obs_existente = self.db.get_nota(est_id, self.current_evaluacion)
             
-            # Frame para nota + ícono de estado (juntos)
             nota_frame = CTkFrame(row, fg_color="transparent")
             nota_frame.pack(side="left", padx=5)
             
-            # Entry de nota
             nota_var = ctk.StringVar(value=str(nota_existente) if nota_existente is not None else "")
             entry_nota = CTkEntry(nota_frame, width=80, textvariable=nota_var, justify="center", 
                                  placeholder_text="0-100")
             entry_nota.pack(side="left")
             
-            # Ícono de estado al lado de la nota
             estado_text = "✓" if nota_existente else "○"
             estado_color = "green" if nota_existente else "gray"
             estado_label = CTkLabel(nota_frame, text=estado_text, width=25, text_color=estado_color)
             estado_label.pack(side="left", padx=(5, 0))
             
-            # Entry de observaciones (barra única)
             obs_var = ctk.StringVar(value=obs_existente or "")
             entry_obs = CTkEntry(row, textvariable=obs_var, 
                                 placeholder_text="Observaciones...")
             entry_obs.pack(side="left", padx=10, fill="x", expand=True)
             
-            # Eventos de guardado automático
             def guardar_al_salir(event, eid=est_id, nv=nota_var, ov=obs_var, el=estado_label):
                 self.guardar_nota_auto(eid, nv, ov, el)
             
@@ -701,29 +584,11 @@ class GestorNotasApp(CTk):
         
         self.status_label.configure(text=f"📊 {len(estudiantes)} estudiantes - Guardado automático activo")
     
-    def guardar_nota_individual(self, estudiante_id, nota_var, obs_var):
-        try:
-            nota_str = nota_var.get().strip()
-            if nota_str:
-                nota = float(nota_str)
-                if not 0 <= nota <= 100:
-                    raise ValueError("Nota debe estar entre 0 y 100")
-            else:
-                nota = None
-            
-            self.db.guardar_nota(estudiante_id, self.current_evaluacion, nota, obs_var.get())
-            self.status_label.configure(text=f"✅ Nota guardada")
-            self.actualizar_resumen()
-            
-        except ValueError as e:
-            messagebox.showerror("Error", f"Nota inválida: {e}")
-    
     def guardar_nota_auto(self, estudiante_id, nota_var, obs_var, estado_label):
         """Guarda nota automáticamente al cambiar de campo"""
         try:
             nota_str = nota_var.get().strip()
             
-            # Si está vacío, mostrar como pendiente
             if not nota_str:
                 estado_label.configure(text="○", text_color="gray")
                 return
@@ -734,46 +599,62 @@ class GestorNotasApp(CTk):
                 self.status_label.configure(text="❌ Nota debe ser entre 0-100", text_color="red")
                 return
             
-            # Guardar en base de datos
             self.db.guardar_nota(estudiante_id, self.current_evaluacion, nota, obs_var.get())
             
-            # Mostrar guardado exitoso
             estado_label.configure(text="✓", text_color="green")
             self.status_label.configure(text=f"✅ Nota guardada", text_color="green")
             
-            # Actualizar resumen
             self.after(100, self.actualizar_resumen)
             
         except ValueError:
             estado_label.configure(text="❌", text_color="red")
             self.status_label.configure(text="❌ Error: Ingresa un número válido", text_color="red")
     
-    def guardar_todas_notas(self):
-        if not self.entries_notas:
-            messagebox.showinfo("Info", "No hay notas para guardar")
-            return
-            
-        guardadas = 0
-        for est_id, (nota_var, obs_var) in self.entries_notas.items():
-            try:
-                nota_str = nota_var.get().strip()
-                if nota_str:
-                    nota = float(nota_str)
-                    if not 0 <= nota <= 100:
-                        continue
-                else:
-                    nota = None
-                
-                self.db.guardar_nota(est_id, self.current_evaluacion, nota, obs_var.get())
-                guardadas += 1
-            except:
-                continue
-        
-        self.status_label.configure(text=f"✅ {guardadas} notas guardadas")
-        self.actualizar_resumen()
-        messagebox.showinfo("Éxito", f"{guardadas} notas guardadas correctamente")
+    def refrescar_vista(self):
+        """Recarga la vista actual"""
+        if self.current_evaluacion:
+            self.load_estudiantes_notas()
+            self.status_label.configure(text="🔄 Vista actualizada")
     
-    # ========== PESTAÑA DE CONFIGURACIÓN ==========
+    # ========== PESTAÑAS Y CONFIGURACIÓN ==========
+    
+    def setup_tab_notas(self):
+        self.tab_notas.grid_columnconfigure(0, weight=1)
+        self.tab_notas.grid_rowconfigure(1, weight=1)
+        
+        self.info_frame = CTkFrame(self.tab_notas)
+        self.info_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        
+        self.info_label = CTkLabel(self.info_frame, text="Selecciona un curso y evaluación para comenzar", 
+                                  font=ctk.CTkFont(size=14, weight="bold"))
+        self.info_label.pack(pady=10)
+        
+        self.scroll_frame = CTkScrollableFrame(self.tab_notas, label_text="Lista de Estudiantes")
+        self.scroll_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        self.scroll_frame.grid_columnconfigure(0, weight=1)
+        
+        self.btn_refrescar = CTkButton(self.tab_notas, text="🔄 Refrescar Datos", 
+                                      command=self.refrescar_vista,
+                                      height=40, font=ctk.CTkFont(size=14))
+        self.btn_refrescar.grid(row=2, column=0, pady=10)
+    
+    def setup_tab_config(self):
+        self.tab_config.grid_columnconfigure(0, weight=1)
+        self.tab_config.grid_rowconfigure(0, weight=1)
+        
+        self.config_text = ctk.CTkTextbox(self.tab_config, wrap="word", font=ctk.CTkFont(size=12))
+        self.config_text.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.config_text.insert("0.0", "Aquí se mostrará la configuración del curso seleccionado...")
+        self.config_text.configure(state="disabled")
+    
+    def setup_tab_resumen(self):
+        self.tab_resumen.grid_columnconfigure(0, weight=1)
+        self.tab_resumen.grid_rowconfigure(0, weight=1)
+        
+        self.resumen_text = ctk.CTkTextbox(self.tab_resumen, wrap="word", font=ctk.CTkFont(size=12))
+        self.resumen_text.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.resumen_text.insert("0.0", "Selecciona un curso para ver estadísticas...")
+        self.resumen_text.configure(state="disabled")
     
     def actualizar_config_curso(self):
         if not self.current_curso:
@@ -815,8 +696,6 @@ class GestorNotasApp(CTk):
         self.config_text.delete("0.0", "end")
         self.config_text.insert("0.0", texto)
         self.config_text.configure(state="disabled")
-    
-    # ========== PESTAÑA DE RESUMEN ==========
     
     def actualizar_resumen(self):
         if not self.current_curso:
@@ -865,8 +744,11 @@ class GestorNotasApp(CTk):
     
     def actualizar_info_curso(self):
         if self.current_curso:
-            nombre = self.curso_var.get().split(" (")[0]
-            self.info_label.configure(text=f"Curso: {nombre}")
+            # Buscar el nombre del curso actual
+            for nombre, cid in self.cursos_data.items():
+                if cid == self.current_curso:
+                    self.info_label.configure(text=f"Curso: {nombre}")
+                    return
         else:
             self.info_label.configure(text="Selecciona un curso y evaluación para comenzar")
     
@@ -881,8 +763,6 @@ class GestorNotasApp(CTk):
         self.resumen_text.delete("0.0", "end")
         self.resumen_text.insert("0.0", "Selecciona un curso...")
         self.resumen_text.configure(state="disabled")
-        self.eval_menu.configure(values=["Selecciona evaluación..."])
-        self.eval_var.set("Selecciona evaluación...")
     
     def limpiar_tab_notas(self):
         for widget in self.scroll_frame.winfo_children():
@@ -897,7 +777,13 @@ class GestorNotasApp(CTk):
             messagebox.showwarning("Advertencia", "Selecciona un curso primero")
             return
         
-        nombre_archivo = self.curso_var.get().split(" (")[0].replace(" ", "_")
+        # Obtener nombre del curso
+        nombre_archivo = "curso"
+        for nombre, cid in self.cursos_data.items():
+            if cid == self.current_curso:
+                nombre_archivo = nombre.replace(" ", "_")
+                break
+        
         filepath = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")],
@@ -953,6 +839,116 @@ Para configurar Google Drive:
         if messagebox.askyesno("Configurar Google Drive", instrucciones):
             import webbrowser
             webbrowser.open("https://console.cloud.google.com/")
+    
+    # ========== SETUP_UI AL FINAL ==========
+    
+    def setup_ui(self):
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        
+        # ========== SIDEBAR ==========
+        self.sidebar = CTkFrame(self, width=300, corner_radius=0)
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        self.sidebar.grid_rowconfigure(6, weight=1)
+        
+        # Título
+        self.title_label = CTkLabel(self.sidebar, text="📚 Gestor de Notas", 
+                                   font=ctk.CTkFont(size=20, weight="bold"))
+        self.title_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        
+        # Gestión de Cursos - AHORA CON BOTONES
+        self.cursos_frame = CTkFrame(self.sidebar)
+        self.cursos_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        
+        CTkLabel(self.cursos_frame, text="Cursos", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        
+        # Frame scrollable para botones de cursos
+        self.cursos_scroll = CTkScrollableFrame(self.cursos_frame, height=100)
+        self.cursos_scroll.pack(fill="x", padx=5, pady=5)
+        
+        btn_frame = CTkFrame(self.cursos_frame, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=10, pady=5)
+        
+        CTkButton(btn_frame, text="➕ Nuevo", width=80, 
+                 command=self.crear_curso).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="✏️ Editar", width=80, 
+                 command=self.editar_curso).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="❌", width=50, 
+                 command=self.eliminar_curso, fg_color="red", hover_color="darkred").pack(side="left", padx=2)
+        
+        # Gestión de Evaluaciones - AHORA CON BOTONES
+        self.evals_frame = CTkFrame(self.sidebar)
+        self.evals_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+        
+        CTkLabel(self.evals_frame, text="Evaluaciones", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        
+        # Frame scrollable para botones de evaluaciones
+        self.evals_scroll = CTkScrollableFrame(self.evals_frame, height=100)
+        self.evals_scroll.pack(fill="x", padx=5, pady=5)
+        
+        btn_frame = CTkFrame(self.evals_frame, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=10, pady=5)
+        
+        CTkButton(btn_frame, text="➕ Nuevo", width=80, 
+                 command=self.agregar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="✏️ Editar", width=80, 
+                 command=self.editar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="❌", width=50, 
+                 command=self.eliminar_evaluacion, fg_color="orange", hover_color="darkorange").pack(side="left", padx=2)
+        
+        # Gestión de Estudiantes
+        self.est_frame = CTkFrame(self.sidebar)
+        self.est_frame.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
+        
+        CTkLabel(self.est_frame, text="Estudiantes", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        
+        CTkButton(self.est_frame, text="➕ Agregar Estudiante", 
+                 command=self.agregar_estudiante).pack(pady=2, fill="x", padx=10)
+        CTkButton(self.est_frame, text="➕ Agregar Varios", 
+                 command=self.agregar_varios_estudiantes).pack(pady=2, fill="x", padx=10)
+        
+        btn_frame = CTkFrame(self.est_frame, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=10, pady=2)
+        
+        CTkButton(btn_frame, text="✏️ Editar", 
+                 command=self.editar_estudiante).pack(side="left", fill="x", expand=True, padx=2)
+        CTkButton(btn_frame, text="❌ Eliminar", 
+                 command=self.eliminar_estudiante, fg_color="red", hover_color="darkred").pack(side="left", fill="x", expand=True, padx=2)
+        
+        # Herramientas
+        self.tools_frame = CTkFrame(self.sidebar)
+        self.tools_frame.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
+        
+        CTkLabel(self.tools_frame, text="Herramientas", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        
+        CTkButton(self.tools_frame, text="📊 Exportar a Excel", 
+                 command=self.exportar_excel).pack(pady=2, fill="x", padx=10)
+        CTkButton(self.tools_frame, text="☁️ Sincronizar Drive", 
+                 command=self.sincronizar_drive, fg_color="green", hover_color="darkgreen").pack(pady=2, fill="x", padx=10)
+        CTkButton(self.tools_frame, text="⚙️ Configurar Drive", 
+                 command=self.configurar_drive).pack(pady=2, fill="x", padx=10)
+        
+        # Status
+        self.status_label = CTkLabel(self.sidebar, text="Estado: Listo", 
+                                    font=ctk.CTkFont(size=12))
+        self.status_label.grid(row=5, column=0, padx=20, pady=20, sticky="s")
+        
+        # ========== ÁREA PRINCIPAL ==========
+        self.main_frame = CTkFrame(self)
+        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        self.main_frame.grid_columnconfigure(0, weight=1)
+        self.main_frame.grid_rowconfigure(0, weight=1)
+        
+        self.tabview = CTkTabview(self.main_frame)
+        self.tabview.grid(row=0, column=0, sticky="nsew")
+        
+        self.tab_notas = self.tabview.add("Registro de Notas")
+        self.tab_config = self.tabview.add("Configuración del Curso")
+        self.tab_resumen = self.tabview.add("Resumen y Estadísticas")
+        
+        self.setup_tab_notas()
+        self.setup_tab_config()
+        self.setup_tab_resumen()
 
 if __name__ == "__main__":
     app = GestorNotasApp()
