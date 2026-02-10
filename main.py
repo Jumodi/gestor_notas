@@ -7,6 +7,49 @@ from drive_sync import GoogleDriveSync
 import os
 import threading
 import platform
+from sync_manager import SyncManager
+import time
+import sys
+SISTEMA = platform.system()
+
+# Funciones para manejar rutas en .exe y en desarrollo
+def get_resource_path(relative_path):
+    """Obtiene la ruta correcta tanto en desarrollo como en .exe"""
+    if hasattr(sys, '_MEIPASS'):
+        # Si es .exe (PyInstaller crea carpeta temporal)
+        base_path = sys._MEIPASS
+    else:
+        # Si es script .py normal
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
+
+def get_data_path():
+    """Obtiene la ruta de la carpeta data (en la misma ubicación que el .exe)"""
+    if getattr(sys, 'frozen', False):
+        # Si es .exe, data está junto al .exe
+        base_path = os.path.dirname(sys.executable)
+    else:
+        # Si es script, data está en la carpeta del proyecto
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    
+    data_path = os.path.join(base_path, 'data')
+    os.makedirs(data_path, exist_ok=True)
+    return data_path
+
+def get_token_path():
+    """Obtiene la ruta del token.json (junto al .exe, no dentro del .exe)"""
+    if getattr(sys, 'frozen', False):
+        base_path = os.path.dirname(sys.executable)
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, 'token.json')
+
+# Definir rutas globales
+DATA_DIR = get_data_path()
+DB_PATH = os.path.join(DATA_DIR, 'notas.db')
+CREDENTIALS_PATH = get_resource_path('credentials.json')
+TOKEN_PATH = get_token_path()
 
 # Detectar sistema operativo
 SISTEMA = platform.system()
@@ -17,25 +60,124 @@ ctk.set_default_color_theme("blue")
 class GestorNotasApp(CTk):
     def __init__(self):
         super().__init__()
-        
+    
         self.title("Gestor de Evaluaciones Universitarias")
         self.geometry("1400x900")
         self.minsize(1200, 700)
         
-        self.db = DatabaseManager()
-        self.drive = GoogleDriveSync()
+        # Usar rutas dinámicas para .exe
+        self.db = DatabaseManager(DB_PATH)
+        self.drive = GoogleDriveSync(credentials_path=CREDENTIALS_PATH, token_path=TOKEN_PATH)
+        self.sync_manager = SyncManager(credentials_path=CREDENTIALS_PATH, token_path=TOKEN_PATH)
         self.current_curso = None
         self.current_evaluacion = None
         self.entries_notas = {}
-        
-        # Inicializar variables de botones
-        self.curso_buttons = {}
-        self.eval_buttons = {}
-        self.cursos_data = {}
-        self.evals_data = {}
+        self.auto_sync_enabled = False
         
         self.setup_ui()
         self.load_cursos()
+        self.setup_auto_sync()
+
+        # Sincronizar datos Drive
+
+    def setup_auto_sync(self):
+        """Configura sincronización automática cada 5 minutos"""
+        def auto_sync_loop():
+            while self.auto_sync_enabled:
+                time.sleep(300)  # 5 minutos
+                if self.current_curso and os.path.exists(DB_PATH):
+                    try:
+                        success, msg = self.sync_manager.upload_database(DB_PATH)
+                        if success:
+                            self.after(0, lambda: self.status_label.configure(text=f"☁️ {msg}"))
+                    except:
+                        pass  # Silenciar errores en background
+        
+        self.auto_sync_enabled = True
+        threading.Thread(target=auto_sync_loop, daemon=True).start()
+
+    def sincronizar_manual(self):
+        """Sincronización manual con opciones"""
+        if not os.path.exists(CREDENTIALS_PATH):
+            messagebox.showerror("Error", "No se ha configurado Google Drive.\nVe a Configurar Drive primero.")
+            return
+        
+        # Crear diálogo de opciones
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Sincronizar con Drive")
+        dialog.geometry("400x300")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        CTkLabel(dialog, text="Opciones de sincronización", 
+                font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
+        
+        def subir():
+            success, msg = self.sync_manager.upload_database(DB_PATH)
+            messagebox.showinfo("Resultado", msg)
+            dialog.destroy()
+        
+        def descargar():
+            # Backup antes de descargar
+            if os.path.exists(DB_PATH):
+                respuesta = messagebox.askyesno("Confirmar", 
+                    "Esto reemplazará tu base de datos local.\n¿Deseas continuar?")
+                if not respuesta:
+                    return
+            
+            success, msg = self.sync_manager.download_latest(DB_PATH)
+            if success:
+                messagebox.showinfo("Éxito", msg + "\n\nReinicia la aplicación para ver los cambios.")
+                self.load_cursos()
+            else:
+                messagebox.showerror("Error", msg)
+            dialog.destroy()
+        
+        def ver_versiones():
+            versions = self.sync_manager.list_versions(limit=10)
+            if not versions:
+                messagebox.showinfo("Versiones", "No hay versiones en Drive")
+                return
+            
+            texto = "Versiones disponibles:\n\n"
+            for v in versions[:5]:
+                texto += f"• {v['fecha']} por {v['user']}\n"
+            
+            messagebox.showinfo("Versiones", texto)
+        
+        CTkButton(dialog, text="⬆️ Subir ahora", command=subir, 
+                 fg_color="blue").pack(pady=5, fill="x", padx=20)
+        CTkButton(dialog, text="⬇️ Descargar última", command=descargar, 
+                 fg_color="green").pack(pady=5, fill="x", padx=20)
+        CTkButton(dialog, text="📋 Ver versiones", command=ver_versiones, 
+                 fg_color="gray").pack(pady=5, fill="x", padx=20)
+        
+        # Toggle auto-sync
+        def toggle_auto():
+            self.auto_sync_enabled = not self.auto_sync_enabled
+            estado = "ACTIVADA" if self.auto_sync_enabled else "DESACTIVADA"
+            btn_auto.configure(text=f"Auto-sync: {estado}")
+        
+        estado = "ACTIVADA" if self.auto_sync_enabled else "DESACTIVADA"
+        btn_auto = CTkButton(dialog, text=f"Auto-sync: {estado}", 
+                            command=toggle_auto, fg_color="orange")
+        btn_auto.pack(pady=10, fill="x", padx=20)
+
+    def compartir_carpeta(self):
+        """Comparte acceso con otro usuario"""
+        if not os.path.exists(CREDENTIALS_PATH):
+            messagebox.showerror("Error", "Configura Google Drive primero")
+            return
+        
+        dialog = CTkInputDialog(text="Email del colaborador:", title="Compartir acceso")
+        email = dialog.get_input()
+        
+        if email and '@' in email:
+            success, msg = self.sync_manager.share_folder(email)
+            if success:
+                messagebox.showinfo("Éxito", msg)
+            else:
+                messagebox.showerror("Error", msg)
     
     # ========== FUNCIONES DE CURSOS  ==========
     
@@ -803,7 +945,7 @@ class GestorNotasApp(CTk):
                 messagebox.showerror("Error", f"No se pudo exportar:\n{str(e)}")
     
     def sincronizar_drive(self):
-        if not os.path.exists('credentials.json'):
+        if not os.path.exists(CREDENTIALS_PATH):
             messagebox.showerror("Error", "No se encontró credentials.json\nConfigura Google Drive primero.")
             return
         
@@ -811,7 +953,7 @@ class GestorNotasApp(CTk):
         self.update()
         
         def sync_task():
-            success, msg = self.drive.sincronizar_db('data/notas.db')
+            success, msg = self.drive.sincronizar_db(DB_PATH)
             self.after(0, lambda: self.sync_completed(success, msg))
         
         thread = threading.Thread(target=sync_task)
@@ -829,7 +971,7 @@ class GestorNotasApp(CTk):
         instrucciones = """
 Para configurar Google Drive:
 
-1. Ve a https://console.cloud.google.com/
+1. Ve a https://console.cloud.google.com/  
 2. Crea un nuevo proyecto
 3. Habilita la API de Google Drive
 4. Ve a "Credenciales" → "Crear credenciales" → "ID de cliente OAuth"
@@ -842,7 +984,7 @@ Para configurar Google Drive:
         
         if messagebox.askyesno("Configurar Google Drive", instrucciones):
             import webbrowser
-            webbrowser.open("https://console.cloud.google.com/")
+            webbrowser.open("https://console.cloud.google.com/  ")
     
     # ========== SETUP_UI ==========
     
@@ -850,19 +992,23 @@ Para configurar Google Drive:
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
         
-        # ========== SIDEBAR ==========
+        # ========== SIDEBAR CON SCROLL ==========
         self.sidebar = CTkFrame(self, width=300, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(6, weight=1)
+        self.sidebar.grid_rowconfigure(0, weight=1)  # El scroll ocupa todo el espacio
+        
+        # Scrollable frame para todo el contenido del sidebar
+        self.sidebar_scroll = CTkScrollableFrame(self.sidebar, width=280, height=800)
+        self.sidebar_scroll.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         
         # Título
-        self.title_label = CTkLabel(self.sidebar, text="📚 Gestor de Notas", 
+        self.title_label = CTkLabel(self.sidebar_scroll, text="📚 Gestor de Notas", 
                                    font=ctk.CTkFont(size=20, weight="bold"))
-        self.title_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        self.title_label.pack(pady=(0, 10))
         
-        # Gestión de Cursos 
-        self.cursos_frame = CTkFrame(self.sidebar)
-        self.cursos_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        # ========== GESTIÓN DE CURSOS ==========
+        self.cursos_frame = CTkFrame(self.sidebar_scroll)
+        self.cursos_frame.pack(fill="x", pady=5)
         
         CTkLabel(self.cursos_frame, text="Cursos", font=ctk.CTkFont(weight="bold")).pack(pady=5)
         
@@ -871,7 +1017,7 @@ Para configurar Google Drive:
         self.cursos_scroll.pack(fill="x", padx=5, pady=5)
         
         btn_frame = CTkFrame(self.cursos_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=10, pady=5)
+        btn_frame.pack(fill="x", padx=5, pady=5)
         
         CTkButton(btn_frame, text="➕ Nuevo", width=80, 
                  command=self.crear_curso).pack(side="left", padx=2, fill="x", expand=True)
@@ -880,9 +1026,9 @@ Para configurar Google Drive:
         CTkButton(btn_frame, text="❌", width=50, 
                  command=self.eliminar_curso, fg_color="red", hover_color="darkred").pack(side="left", padx=2)
         
-        # Gestión de Evaluaciones
-        self.evals_frame = CTkFrame(self.sidebar)
-        self.evals_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+        # ========== GESTIÓN DE EVALUACIONES ==========
+        self.evals_frame = CTkFrame(self.sidebar_scroll)
+        self.evals_frame.pack(fill="x", pady=5)
         
         CTkLabel(self.evals_frame, text="Evaluaciones", font=ctk.CTkFont(weight="bold")).pack(pady=5)
         
@@ -891,7 +1037,7 @@ Para configurar Google Drive:
         self.evals_scroll.pack(fill="x", padx=5, pady=5)
         
         btn_frame = CTkFrame(self.evals_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=10, pady=5)
+        btn_frame.pack(fill="x", padx=5, pady=5)
         
         CTkButton(btn_frame, text="➕ Nuevo", width=80, 
                  command=self.agregar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
@@ -900,42 +1046,48 @@ Para configurar Google Drive:
         CTkButton(btn_frame, text="❌", width=50, 
                  command=self.eliminar_evaluacion, fg_color="orange", hover_color="darkorange").pack(side="left", padx=2)
         
-        # Gestión de Estudiantes
-        self.est_frame = CTkFrame(self.sidebar)
-        self.est_frame.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
+        # ========== GESTIÓN DE ESTUDIANTES ==========
+        self.est_frame = CTkFrame(self.sidebar_scroll)
+        self.est_frame.pack(fill="x", pady=5)
         
         CTkLabel(self.est_frame, text="Estudiantes", font=ctk.CTkFont(weight="bold")).pack(pady=5)
         
         CTkButton(self.est_frame, text="➕ Agregar Estudiante", 
-                 command=self.agregar_estudiante).pack(pady=2, fill="x", padx=10)
+                 command=self.agregar_estudiante).pack(pady=2, fill="x", padx=5)
         CTkButton(self.est_frame, text="➕ Agregar Varios", 
-                 command=self.agregar_varios_estudiantes).pack(pady=2, fill="x", padx=10)
+                 command=self.agregar_varios_estudiantes).pack(pady=2, fill="x", padx=5)
         
         btn_frame = CTkFrame(self.est_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=10, pady=2)
+        btn_frame.pack(fill="x", padx=5, pady=2)
         
         CTkButton(btn_frame, text="✏️ Editar", 
                  command=self.editar_estudiante).pack(side="left", fill="x", expand=True, padx=2)
         CTkButton(btn_frame, text="❌ Eliminar", 
                  command=self.eliminar_estudiante, fg_color="red", hover_color="darkred").pack(side="left", fill="x", expand=True, padx=2)
         
-        # Herramientas
-        self.tools_frame = CTkFrame(self.sidebar)
-        self.tools_frame.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
+        # ========== HERRAMIENTAS (AHORA VISIBLE CON SCROLL) ==========
+        self.tools_frame = CTkFrame(self.sidebar_scroll)
+        self.tools_frame.pack(fill="x", pady=5)
         
         CTkLabel(self.tools_frame, text="Herramientas", font=ctk.CTkFont(weight="bold")).pack(pady=5)
         
         CTkButton(self.tools_frame, text="📊 Exportar a Excel", 
-                 command=self.exportar_excel).pack(pady=2, fill="x", padx=10)
-        CTkButton(self.tools_frame, text="☁️ Sincronizar Drive", 
-                 command=self.sincronizar_drive, fg_color="green", hover_color="darkgreen").pack(pady=2, fill="x", padx=10)
+                  command=self.exportar_excel).pack(pady=2, fill="x", padx=5)
         CTkButton(self.tools_frame, text="⚙️ Configurar Drive", 
-                 command=self.configurar_drive).pack(pady=2, fill="x", padx=10)
+                  command=self.configurar_drive).pack(pady=2, fill="x", padx=10)
+        CTkButton(self.tools_frame, text="☁️ Sincronizar", 
+                  command=self.sincronizar_manual, 
+                  fg_color="green", 
+                  hover_color="darkgreen").pack(pady=2, fill="x", padx=10)
+        CTkButton(self.tools_frame, text="👤 Compartir acceso", 
+                  command=self.compartir_carpeta, 
+                  fg_color="blue", 
+                  hover_color="darkblue").pack(pady=2, fill="x", padx=10)
         
-        # Status
-        self.status_label = CTkLabel(self.sidebar, text="Estado: Listo", 
+        # Status (al final del scroll)
+        self.status_label = CTkLabel(self.sidebar_scroll, text="Estado: Listo", 
                                     font=ctk.CTkFont(size=12))
-        self.status_label.grid(row=5, column=0, padx=20, pady=20, sticky="s")
+        self.status_label.pack(pady=10)
         
         # ========== ÁREA PRINCIPAL ==========
         self.main_frame = CTkFrame(self)
