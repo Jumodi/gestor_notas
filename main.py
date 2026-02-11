@@ -10,9 +10,20 @@ import platform
 from sync_manager import SyncManager
 import time
 import sys
+
 SISTEMA = platform.system()
 
 # Funciones para manejar rutas en .exe y en desarrollo
+
+def get_executable_dir():
+    """Obtiene la carpeta donde está el .exe o el script"""
+    if getattr(sys, 'frozen', False):
+        # Si es .exe, devuelve la carpeta del .exe
+        return os.path.dirname(sys.executable)
+    else:
+        # Si es script .py, devuelve la carpeta del script
+        return os.path.dirname(os.path.abspath(__file__))
+
 def get_resource_path(relative_path):
     """Obtiene la ruta correcta tanto en desarrollo como en .exe"""
     if hasattr(sys, '_MEIPASS'):
@@ -48,8 +59,11 @@ def get_token_path():
 # Definir rutas globales
 DATA_DIR = get_data_path()
 DB_PATH = os.path.join(DATA_DIR, 'notas.db')
-CREDENTIALS_PATH = get_resource_path('credentials.json')
+CREDENTIALS_PATH = os.path.join(get_executable_dir(), 'credentials.json')
 TOKEN_PATH = get_token_path()
+
+print(f"DEBUG: Buscando credentials en: {CREDENTIALS_PATH}")  # Línea temporal para verificar
+print(f"DEBUG: ¿Existe?: {os.path.exists(CREDENTIALS_PATH)}")  # Línea temporal para verificar
 
 # Detectar sistema operativo
 SISTEMA = platform.system()
