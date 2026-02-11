@@ -65,6 +65,7 @@ TOKEN_PATH = get_token_path()
 print(f"DEBUG: Buscando credentials en: {CREDENTIALS_PATH}")  # Línea temporal para verificar
 print(f"DEBUG: ¿Existe?: {os.path.exists(CREDENTIALS_PATH)}")  # Línea temporal para verificar
 
+
 # Detectar sistema operativo
 SISTEMA = platform.system()
 
