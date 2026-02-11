@@ -1,0 +1,7 @@
+credentials.json
+token.json
+data/
+*.exe
+*.bat
+*.iss
+installer/
