@@ -401,8 +401,9 @@ class DatabaseManager:
     # ========== EXPORTACIÓN ==========
     
     def exportar_a_excel(self, curso_id, filepath):
-        """Exporta todas las notas del curso a Excel"""
-        import pandas as pd
+        """Exporta todas las notas del curso a Excel usando openpyxl"""
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill
         
         conn = self.get_connection()
         
@@ -416,42 +417,59 @@ class DatabaseManager:
         
         ests = self.get_estudiantes(curso_id)
         
-        data = []
+        # Crear libro de Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Notas'
+        
+        # Encabezados
+        headers = ['ID', 'Nombre', 'Grupo', 'Email'] + eval_nombres + ['PROMEDIO']
+        ws.append(headers)
+        
+        # Formato encabezados (negrita, fondo gris)
+        header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+        header_font = Font(bold=True, color='FFFFFF')
+        header_align = Alignment(horizontal='center', vertical='center')
+        
+        for cell in ws[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+        
+        # Datos de estudiantes
         for est in ests:
             est_id, nombre, grupo, email = est
-            row = {
-                'ID': est_id,
-                'Nombre': nombre,
-                'Grupo': grupo,
-                'Email': email or ''
-            }
+            row = [est_id, nombre, grupo, email or '']
             
-            for eval_id, eval_nombre in zip(eval_ids, eval_nombres):
+            for eval_id in eval_ids:
                 nota, _ = self.get_nota(est_id, eval_id)
-                row[eval_nombre] = nota if nota is not None else ''
+                row.append(nota if nota is not None else '')
             
             promedio, _ = self.calcular_promedio(est_id, curso_id)
-            row['PROMEDIO'] = promedio
+            row.append(promedio)
             
-            data.append(row)
+            ws.append(row)
         
-        df = pd.DataFrame(data)
-        
-        with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='Notas', index=False)
+        # Ajustar anchos de columna
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
             
-            worksheet = writer.sheets['Notas']
-            for column in worksheet.columns:
-                max_length = 0
-                column = [cell for cell in column]
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 50)
-                worksheet.column_dimensions[column[0].column_letter].width = adjusted_width
+            for cell in column:
+                try:
+                    cell_length = len(str(cell.value))
+                    if cell_length > max_length:
+                        max_length = cell_length
+                except:
+                    pass
+            
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
         
+        # Congelar primera fila
+        ws.freeze_panes = 'A2'
+        
+        # Guardar archivo
+        wb.save(filepath)
         conn.close()
         return filepath

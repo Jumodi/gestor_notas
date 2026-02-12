@@ -690,6 +690,7 @@ class GestorNotasApp(CTk):
             eval_nombre = "Evaluación"
             eval_porcentaje = 0
         
+        # Header info
         header_info = CTkFrame(self.scroll_frame)
         header_info.pack(fill="x", padx=5, pady=5)
         
@@ -697,42 +698,65 @@ class GestorNotasApp(CTk):
                 text=f"📝 Evaluación: {eval_nombre} ({eval_porcentaje}%) - Guardado automático", 
                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=5)
         
+        # ===== HEADER DE COLUMNAS CON GRID =====
         header = CTkFrame(self.scroll_frame)
         header.pack(fill="x", padx=5, pady=2)
         
-        CTkLabel(header, text="Estudiante", font=ctk.CTkFont(weight="bold"), width=350).pack(side="left", padx=10)
-        CTkLabel(header, text="Nota", font=ctk.CTkFont(weight="bold"), width=150).pack(side="left", padx=10)
-        CTkLabel(header, text="Observaciones", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10, fill="x", expand=True)
+        # Configurar columnas: Nombre (fijo), Nota (fijo), Observaciones (expansible)
+        header.grid_columnconfigure(0, weight=0, minsize=350)  # Nombre
+        header.grid_columnconfigure(1, weight=0, minsize=120)  # Nota
+        header.grid_columnconfigure(2, weight=1)               # Observaciones
         
+        # Encabezados
+        CTkLabel(header, text="Estudiante", font=ctk.CTkFont(weight="bold")).grid(
+            row=0, column=0, padx=(10, 5), pady=5, sticky="w")
+        CTkLabel(header, text="Nota", font=ctk.CTkFont(weight="bold")).grid(
+            row=0, column=1, padx=5, pady=5, sticky="ew")
+        CTkLabel(header, text="Observaciones", font=ctk.CTkFont(weight="bold")).grid(
+            row=0, column=2, padx=(5, 10), pady=5, sticky="w")
+        
+        # ===== FILAS DE ESTUDIANTES CON GRID =====
         for est in estudiantes:
             est_id, nombre, grupo, email = est
             
             row = CTkFrame(self.scroll_frame)
             row.pack(fill="x", padx=5, pady=2)
             
-            nombre_text = f"{nombre}" + (f" (G{grupo})" if grupo > 1 else "")
-            CTkLabel(row, text=nombre_text, width=350).pack(side="left", padx=10)
+            # Misma configuración de columnas que el header
+            row.grid_columnconfigure(0, weight=0, minsize=350)  # Nombre
+            row.grid_columnconfigure(1, weight=0, minsize=120)  # Nota
+            row.grid_columnconfigure(2, weight=1)               # Observaciones
             
+            # --- COLUMNA 0: Nombre ---
+            nombre_text = f"{nombre}" + (f" (G{grupo})" if grupo > 1 else "")
+            CTkLabel(row, text=nombre_text).grid(
+                row=0, column=0, padx=(10, 5), pady=2, sticky="w")
+            
+            # --- COLUMNA 1: Nota (contenedor para entry + indicador) ---
             nota_existente, obs_existente = self.db.get_nota(est_id, self.current_evaluacion)
             
-            nota_frame = CTkFrame(row, fg_color="transparent")
-            nota_frame.pack(side="left", padx=5)
+            nota_container = CTkFrame(row, fg_color="transparent", width=120, height=30)
+            nota_container.grid(row=0, column=1, padx=5, pady=2, sticky="nsew")
+            nota_container.grid_propagate(False)
             
             nota_var = ctk.StringVar(value=str(nota_existente) if nota_existente is not None else "")
-            entry_nota = CTkEntry(nota_frame, width=80, textvariable=nota_var, justify="center", 
-                                 placeholder_text="0-100")
-            entry_nota.pack(side="left")
+            entry_nota = CTkEntry(nota_container, width=70, textvariable=nota_var, 
+                                 justify="center", placeholder_text="0-100")
+            entry_nota.place(relx=0.35, rely=0.5, anchor="center")
             
+            # Indicador de estado (✓ o ○)
             estado_text = "✓" if nota_existente else "○"
             estado_color = "green" if nota_existente else "gray"
-            estado_label = CTkLabel(nota_frame, text=estado_text, width=25, text_color=estado_color)
-            estado_label.pack(side="left", padx=(5, 0))
+            estado_label = CTkLabel(nota_container, text=estado_text, width=20, 
+                                   text_color=estado_color, font=ctk.CTkFont(size=14, weight="bold"))
+            estado_label.place(relx=0.85, rely=0.5, anchor="center")
             
+            # --- COLUMNA 2: Observaciones ---
             obs_var = ctk.StringVar(value=obs_existente or "")
-            entry_obs = CTkEntry(row, textvariable=obs_var, 
-                                placeholder_text="Observaciones...")
-            entry_obs.pack(side="left", padx=10, fill="x", expand=True)
+            entry_obs = CTkEntry(row, textvariable=obs_var, placeholder_text="Observaciones...")
+            entry_obs.grid(row=0, column=2, padx=(5, 10), pady=2, sticky="ew")
             
+            # --- BINDINGS PARA GUARDADO AUTOMÁTICO ---
             def guardar_al_salir(event, eid=est_id, nv=nota_var, ov=obs_var, el=estado_label):
                 self.guardar_nota_auto(eid, nv, ov, el)
             
