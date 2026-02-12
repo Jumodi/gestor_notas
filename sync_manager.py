@@ -9,6 +9,7 @@ from google.auth.transport.requests import Request
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload, MediaIoBaseUpload
 import io
 
+
 class SyncManager:
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     SYNC_FOLDER = "GestorNotas_Sync"
