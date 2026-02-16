@@ -75,7 +75,7 @@ ctk.set_default_color_theme("blue")
 class GestorNotasApp(CTk):
     def __init__(self):
         super().__init__()
-    
+
         self.title("Gestor de Evaluaciones Universitarias")
         self.geometry("1400x900")
         self.minsize(1200, 700)
@@ -88,9 +88,10 @@ class GestorNotasApp(CTk):
         self.current_evaluacion = None
         self.entries_notas = {}
         self.auto_sync_enabled = False
+        self.clase_actual_id = None  # ← AGREGAR ESTA LÍNEA para la pestaña de clases
         
-        self.setup_ui()
-        self.load_cursos()
+        self.setup_ui()        # ← PRIMERO crear toda la interfaz
+        self.load_cursos()     # ← DESPUÉS cargar los datos
         self.setup_auto_sync()
 
         # Sincronizar datos Drive
@@ -1034,7 +1035,7 @@ Para configurar Google Drive:
         # ========== SIDEBAR CON SCROLL ==========
         self.sidebar = CTkFrame(self, width=300, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(0, weight=1)  # El scroll ocupa todo el espacio
+        self.sidebar.grid_rowconfigure(0, weight=1)
         
         # Scrollable frame para todo el contenido del sidebar
         self.sidebar_scroll = CTkScrollableFrame(self.sidebar, width=280, height=800)
@@ -1140,10 +1141,375 @@ Para configurar Google Drive:
         self.tab_notas = self.tabview.add("Registro de Notas")
         self.tab_config = self.tabview.add("Configuración del Curso")
         self.tab_resumen = self.tabview.add("Resumen y Estadísticas")
-        
+        self.tab_clases = self.tabview.add("Control de Clases")
+
         self.setup_tab_notas()
         self.setup_tab_config()
         self.setup_tab_resumen()
+        self.setup_tab_clases()
+
+    def setup_tab_clases(self):
+        """Configura la pestaña de Control de Clases"""
+        self.tab_clases.grid_columnconfigure(0, weight=3)  # Panel izquierdo (contenido)
+        self.tab_clases.grid_columnconfigure(1, weight=1)  # Panel derecho (herramientas)
+        self.tab_clases.grid_rowconfigure(0, weight=1)
+        
+        # ========== PANEL IZQUIERDO: Contenido de la clase ==========
+        self.clases_content_frame = CTkFrame(self.tab_clases)
+        self.clases_content_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.clases_content_frame.grid_columnconfigure(0, weight=1)
+        
+        # --- Encabezado de la clase ---
+        CTkLabel(self.clases_content_frame, text="📝 Encabezado de la Clase", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5), padx=10, anchor="w")
+        
+        self.entry_encabezado_clase = CTkEntry(self.clases_content_frame, 
+                                               placeholder_text="Ej: Clase 1 - Introducción al curso - Fecha: DD/MM/AAAA",
+                                               height=35, font=ctk.CTkFont(size=14))
+        self.entry_encabezado_clase.pack(fill="x", padx=10, pady=5)
+        
+        # --- Tópicos a tratar ---
+        CTkLabel(self.clases_content_frame, text="📋 Tópicos que se tratarán:", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
+        self.entry_topicos = CTkEntry(self.clases_content_frame, 
+                                     placeholder_text="Ej: 1. Presentación del sílabo, 2. Conceptos básicos, 3. Dinámica grupal...",
+                                     height=35)
+        self.entry_topicos.pack(fill="x", padx=10, pady=5)
+        
+        # --- Enlaces de lecturas ---
+        CTkLabel(self.clases_content_frame, text="🔗 Enlaces de Lecturas Asignadas:", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
+        # Frame para agregar enlaces dinámicamente
+        self.frame_links = CTkFrame(self.clases_content_frame)
+        self.frame_links.pack(fill="x", padx=10, pady=5)
+        
+        self.links_entries = []  # Lista para guardar los entries de links
+        
+        # Botón para agregar más enlaces
+        CTkButton(self.clases_content_frame, text="➕ Agregar Enlace", 
+                 command=self.agregar_campo_link, fg_color="blue").pack(pady=5, padx=10, anchor="w")
+        
+        # Agregar primer campo de link
+        self.agregar_campo_link()
+        
+        # --- Contenido/Notas de la clase (Texto con formato) ---
+        CTkLabel(self.clases_content_frame, text="📄 Desarrollo de la Clase (Notas):", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
+        # Frame para botones de formato
+        toolbar_frame = CTkFrame(self.clases_content_frame, fg_color="transparent")
+        toolbar_frame.pack(fill="x", padx=10, pady=2)
+        
+        CTkButton(toolbar_frame, text="𝐁 Negrita", width=80, 
+                 command=lambda: self.aplicar_formato_texto("bold")).pack(side="left", padx=2)
+        CTkButton(toolbar_frame, text="𝐼 Cursiva", width=80, 
+                 command=lambda: self.aplicar_formato_texto("italic")).pack(side="left", padx=2)
+        CTkButton(toolbar_frame, text="𝑈 Subrayado", width=80, 
+                 command=lambda: self.aplicar_formato_texto("underline")).pack(side="left", padx=2)
+        
+        # Texto con scroll
+        self.texto_clase = ctk.CTkTextbox(self.clases_content_frame, wrap="word", 
+                                         font=ctk.CTkFont(size=12), height=250)
+        self.texto_clase.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # --- Observaciones/Recordatorios ---
+        CTkLabel(self.clases_content_frame, text="📌 Observaciones / Recordatorios:", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
+        self.entry_observaciones = CTkEntry(self.clases_content_frame, 
+                                           placeholder_text="Ej: Traer material para próxima clase, recordar tarea, etc.",
+                                           height=50)
+        self.entry_observaciones.pack(fill="x", padx=10, pady=5)
+        
+        # --- Botones de guardar y exportar ---
+        btn_frame = CTkFrame(self.clases_content_frame, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=10, pady=15)
+        
+        CTkButton(btn_frame, text="💾 Guardar Clase", command=self.guardar_clase,
+                 fg_color="green", height=40).pack(side="left", padx=5, fill="x", expand=True)
+        CTkButton(btn_frame, text="📄 Exportar esta clase a PDF", command=self.exportar_clase_pdf,
+                 fg_color="blue", height=40).pack(side="left", padx=5, fill="x", expand=True)
+        CTkButton(btn_frame, text="📚 Exportar TODAS las clases", command=self.exportar_todas_clases_pdf,
+                 fg_color="purple", height=40).pack(side="left", padx=5, fill="x", expand=True)
+        
+        # ========== PANEL DERECHO: Herramientas ==========
+        self.clases_tools_frame = CTkFrame(self.tab_clases)
+        self.clases_tools_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        
+        # --- Selector de clase existente ---
+        CTkLabel(self.clases_tools_frame, text="📂 Clases Guardadas", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5), padx=10)
+        
+        self.combo_clases_guardadas = CTkOptionMenu(self.clases_tools_frame, 
+                                                    values=["-- Nueva Clase --"],
+                                                    command=self.cargar_clase_guardada)
+        self.combo_clases_guardadas.pack(fill="x", padx=10, pady=5)
+        
+        CTkButton(self.clases_tools_frame, text="🗑️ Eliminar Clase Seleccionada", 
+                 command=self.eliminar_clase_guardada, fg_color="red").pack(pady=5, padx=10, fill="x")
+        
+        # Separador visual
+        CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
+        
+        # --- Botón de Asistencia ---
+        CTkLabel(self.clases_tools_frame, text="👥 Control de Asistencia", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=5, padx=10)
+        
+        CTkButton(self.clases_tools_frame, text="📅 Registrar Asistencia", 
+                 command=self.abrir_asistencia, height=50, fg_color="orange",
+                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10, padx=10, fill="x")
+        
+        # Separador visual
+        CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
+        
+        # --- Botón de Agrupamiento Aleatorio ---
+        CTkLabel(self.clases_tools_frame, text="🎲 Generador de Grupos", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=5, padx=10)
+        
+        CTkButton(self.clases_tools_frame, text="👥 Crear Grupos Aleatorios", 
+                 command=self.abrir_generador_grupos, height=50, fg_color="teal",
+                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10, padx=10, fill="x")
+        
+        # Separador visual
+        CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
+        
+        # --- Estado ---
+        self.status_clases_label = CTkLabel(self.clases_tools_frame, 
+                                             text="Estado: Listo", 
+                                             font=ctk.CTkFont(size=12))
+        self.status_clases_label.pack(pady=20)
+        
+        # Cargar clases existentes al iniciar
+        self.cargar_lista_clases()
+        
+        # Bindings para guardado automático
+        self.entry_encabezado_clase.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
+        self.entry_topicos.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
+        self.entry_observaciones.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
+        self.texto_clase.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
+
+
+    def agregar_campo_link(self):
+        """Agrega un nuevo campo para ingresar un enlace"""
+        frame_link = CTkFrame(self.frame_links)
+        frame_link.pack(fill="x", pady=2)
+        
+        entry_nombre = CTkEntry(frame_link, placeholder_text="Nombre del documento/lectura", width=200)
+        entry_nombre.pack(side="left", padx=2)
+        
+        entry_url = CTkEntry(frame_link, placeholder_text="https://...", width=300)
+        entry_url.pack(side="left", padx=2, fill="x", expand=True)
+        
+        btn_abrir = CTkButton(frame_link, text="🔗 Abrir", width=60, 
+                             command=lambda: self.abrir_link(entry_url.get()))
+        btn_abrir.pack(side="left", padx=2)
+        
+        btn_eliminar = CTkButton(frame_link, text="❌", width=30, fg_color="red",
+                                 command=lambda: frame_link.destroy())
+        btn_eliminar.pack(side="left", padx=2)
+        
+        self.links_entries.append((entry_nombre, entry_url))
+    
+    def abrir_link(self, url):
+        """Abre el enlace en el navegador"""
+        import webbrowser
+        if url and url.startswith("http"):
+            webbrowser.open(url)
+        else:
+            messagebox.showwarning("URL inválida", "Ingresa una URL válida que empiece con http:// o https://")
+    
+    def aplicar_formato_texto(self, tipo):
+        """Aplica formato al texto seleccionado (simulado con tags)"""
+        try:
+            seleccion = self.texto_clase.tag_ranges("sel")
+            if seleccion:
+                inicio = seleccion[0]
+                fin = seleccion[1]
+                self.texto_clase.tag_add(tipo, inicio, fin)
+                if tipo == "bold":
+                    self.texto_clase.tag_config(tipo, font=ctk.CTkFont(weight="bold"))
+                elif tipo == "italic":
+                    self.texto_clase.tag_config(tipo, font=ctk.CTkFont(slant="italic"))
+                elif tipo == "underline":
+                    self.texto_clase.tag_config(tipo, underline=True)
+        except:
+            pass  # Si no hay selección, ignorar
+    
+    def guardar_clase_auto(self):
+        """Guarda automáticamente la clase actual"""
+        if hasattr(self, 'clase_actual_id') and self.clase_actual_id:
+            self.guardar_clase(silencioso=True)
+    
+    def guardar_clase(self, silencioso=False):
+        """Guarda la clase actual en la base de datos"""
+        if not self.current_curso:
+            if not silencioso:
+                messagebox.showwarning("Advertencia", "Selecciona un curso primero")
+            return
+        
+        encabezado = self.entry_encabezado_clase.get().strip()
+        topicos = self.entry_topicos.get().strip()
+        observaciones = self.entry_observaciones.get().strip()
+        contenido = self.texto_clase.get("1.0", "end").strip()
+        
+        # Recopilar enlaces
+        links = []
+        for nombre_entry, url_entry in self.links_entries:
+            nombre = nombre_entry.get().strip()
+            url = url_entry.get().strip()
+            if nombre or url:
+                links.append({"nombre": nombre, "url": url})
+        
+        # Si no hay encabezado, usar uno por defecto con fecha
+        if not encabezado:
+            from datetime import datetime
+            encabezado = f"Clase del {datetime.now().strftime('%d/%m/%Y')}"
+            self.entry_encabezado_clase.insert(0, encabezado)
+        
+        datos_clase = {
+            "encabezado": encabezado,
+            "topicos": topicos,
+            "links": links,
+            "contenido": contenido,
+            "observaciones": observaciones,
+            "curso_id": self.current_curso,
+            "fecha_modificacion": datetime.now().isoformat()
+        }
+        
+        # Guardar en base de datos (usaremos un método nuevo en DatabaseManager)
+        if hasattr(self.db, 'guardar_clase'):
+            clase_id = self.db.guardar_clase(datos_clase, getattr(self, 'clase_actual_id', None))
+            self.clase_actual_id = clase_id
+            if not silencioso:
+                messagebox.showinfo("Éxito", "Clase guardada correctamente")
+                self.status_clases_label.configure(text=f"✅ Guardado: {encabezado[:30]}...")
+                self.cargar_lista_clases()
+        else:
+            # Guardado temporal en memoria si no existe el método de DB aún
+            if not hasattr(self, 'clases_temp'):
+                self.clases_temp = {}
+            self.clase_actual_id = self.clase_actual_id or f"temp_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            self.clases_temp[self.clase_actual_id] = datos_clase
+            if not silencioso:
+                messagebox.showinfo("Éxito", "Clase guardada (modo temporal)")
+    
+    def cargar_lista_clases(self):
+        """Carga la lista de clases guardadas en el combobox"""
+        if not self.current_curso:
+            return
+        
+        clases = []
+        if hasattr(self.db, 'get_clases'):
+            clases = self.db.get_clases(self.current_curso)
+        elif hasattr(self, 'clases_temp'):
+            clases = [(k, v["encabezado"]) for k, v in self.clases_temp.items() if v.get("curso_id") == self.current_curso]
+        
+        valores = ["-- Nueva Clase --"]
+        self.clases_dict = {"-- Nueva Clase --": None}
+        
+        for clase_id, encabezado in clases:
+            display = encabezado[:50] + "..." if len(encabezado) > 50 else encabezado
+            valores.append(display)
+            self.clases_dict[display] = clase_id
+        
+        self.combo_clases_guardadas.configure(values=valores)
+        self.combo_clases_guardadas.set("-- Nueva Clase --")
+    
+    def cargar_clase_guardada(self, seleccion):
+        """Carga una clase guardada en los campos"""
+        if seleccion == "-- Nueva Clase --":
+            self.limpiar_campos_clase()
+            self.clase_actual_id = None
+            return
+        
+        clase_id = self.clases_dict.get(seleccion)
+        if not clase_id:
+            return
+        
+        # Obtener datos de la clase
+        clase_data = None
+        if hasattr(self.db, 'get_clase_por_id'):
+            clase_data = self.db.get_clase_por_id(clase_id)
+        elif hasattr(self, 'clases_temp') and clase_id in self.clases_temp:
+            clase_data = self.clases_temp[clase_id]
+        
+        if clase_data:
+            self.clase_actual_id = clase_id
+            self.entry_encabezado_clase.delete(0, "end")
+            self.entry_encabezado_clase.insert(0, clase_data.get("encabezado", ""))
+            
+            self.entry_topicos.delete(0, "end")
+            self.entry_topicos.insert(0, clase_data.get("topicos", ""))
+            
+            self.entry_observaciones.delete(0, "end")
+            self.entry_observaciones.insert(0, clase_data.get("observaciones", ""))
+            
+            self.texto_clase.delete("1.0", "end")
+            self.texto_clase.insert("1.0", clase_data.get("contenido", ""))
+            
+            # Limpiar y recrear links
+            for widget in self.frame_links.winfo_children():
+                widget.destroy()
+            self.links_entries = []
+            
+            for link in clase_data.get("links", []):
+                self.agregar_campo_link()
+                if self.links_entries:
+                    self.links_entries[-1][0].insert(0, link.get("nombre", ""))
+                    self.links_entries[-1][1].insert(0, link.get("url", ""))
+            
+            self.status_clases_label.configure(text=f"📂 Cargada: {clase_data.get('encabezado', '')[:30]}...")
+    
+    def limpiar_campos_clase(self):
+        """Limpia todos los campos de la clase"""
+        self.entry_encabezado_clase.delete(0, "end")
+        self.entry_topicos.delete(0, "end")
+        self.entry_observaciones.delete(0, "end")
+        self.texto_clase.delete("1.0", "end")
+        
+        for widget in self.frame_links.winfo_children():
+            widget.destroy()
+        self.links_entries = []
+        self.agregar_campo_link()
+        
+        self.status_clases_label.configure(text="🆕 Nueva clase")
+    
+    def eliminar_clase_guardada(self):
+        """Elimina la clase seleccionada"""
+        seleccion = self.combo_clases_guardadas.get()
+        if seleccion == "-- Nueva Clase --":
+            messagebox.showwarning("Advertencia", "Selecciona una clase para eliminar")
+            return
+        
+        if messagebox.askyesno("Confirmar", f"¿Eliminar '{seleccion}'?"):
+            clase_id = self.clases_dict.get(seleccion)
+            if clase_id and hasattr(self.db, 'eliminar_clase'):
+                self.db.eliminar_clase(clase_id)
+            elif hasattr(self, 'clases_temp') and clase_id in self.clases_temp:
+                del self.clases_temp[clase_id]
+            
+            self.cargar_lista_clases()
+            self.limpiar_campos_clase()
+            messagebox.showinfo("Éxito", "Clase eliminada")
+    
+    def exportar_clase_pdf(self):
+        """Exporta la clase actual a PDF"""
+        messagebox.showinfo("En desarrollo", "La exportación a PDF se implementará en el siguiente paso.\n\nPor ahora puedes copiar el contenido manualmente.")
+    
+    def exportar_todas_clases_pdf(self):
+        """Exporta todas las clases a PDF"""
+        messagebox.showinfo("En desarrollo", "La exportación múltiple a PDF se implementará en el siguiente paso.")
+    
+    def abrir_asistencia(self):
+        """Abre el diálogo de registro de asistencia"""
+        messagebox.showinfo("En desarrollo", "La funcionalidad de asistencia se implementará en el siguiente paso.")
+    
+    def abrir_generador_grupos(self):
+        """Abre el generador de grupos aleatorios"""
+        messagebox.showinfo("En desarrollo", "La funcionalidad de generador de grupos se implementará en el siguiente paso.")
+
 
 if __name__ == "__main__":
     app = GestorNotasApp()
