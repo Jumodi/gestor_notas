@@ -10,6 +10,11 @@ import platform
 from sync_manager import SyncManager
 import time
 import sys
+from tkcalendar import Calendar
+from datetime import datetime, date
+import json
+
+
 
 SISTEMA = platform.system()
 
@@ -1033,18 +1038,744 @@ Deseas abrir la consola de Google Cloud ahora?"""
             self.limpiar_campos_clase()
             messagebox.showinfo("Exito", "Clase eliminada")
 
-    def exportar_clase_pdf(self):
-        messagebox.showinfo("En desarrollo", "La exportacion a PDF se implementara en el siguiente paso. Por ahora puedes copiar el contenido manualmente.")
 
-    def exportar_todas_clases_pdf(self):
-        messagebox.showinfo("En desarrollo", "La exportacion multiple a PDF se implementara en el siguiente paso.")
+    def  abrir_asistencia(self):
+        """Abre el diálogo de registro de asistencia con calendario"""
+        if not self.current_curso:
+            messagebox.showwarning("Advertencia", "Selecciona un curso primero")
+            return
+        
+        # Crear ventana de asistencia
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Registro de Asistencia")
+        dialog.geometry("700x600")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Frame principal dividido en dos columnas
+        dialog.grid_columnconfigure(0, weight=1)
+        dialog.grid_columnconfigure(1, weight=2)
+        dialog.grid_rowconfigure(0, weight=1)
+        
+        # ========== PANEL IZQUIERDO: Calendario y controles ==========
+        left_frame = CTkFrame(dialog)
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        
+        CTkLabel(left_frame, text="Seleccionar Fecha:", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5))
+        
+        # Calendario visual
+        cal_frame = CTkFrame(left_frame)
+        cal_frame.pack(pady=5, padx=10)
+        
+        # Usar tkcalendar Calendar
+        import tkinter as tk
+        cal = Calendar(cal_frame, selectmode='day', year=date.today().year, 
+                      month=date.today().month, day=date.today().day,
+                      locale='es_ES', font="Arial 10", 
+                      background='blue', foreground='white',
+                      selectbackground='red', selectforeground='yellow')
+        cal.pack(pady=5)
+        
+        # Mostrar fecha seleccionada
+        fecha_label = CTkLabel(left_frame, text=f"Fecha: {cal.get_date()}", 
+                              font=ctk.CTkFont(size=14, weight="bold"))
+        fecha_label.pack(pady=10)
+        
+        def actualizar_fecha_label():
+            fecha_label.configure(text=f"Fecha: {cal.get_date()}")
+            dialog.after(100, actualizar_fecha_label)
+        actualizar_fecha_label()
+        
+        # Botones de acción
+        btn_frame = CTkFrame(left_frame, fg_color="transparent")
+        btn_frame.pack(pady=20, fill="x", padx=10)
+        
+        CTkButton(btn_frame, text="Marcar Todos Presentes", 
+                 command=lambda: self.marcar_todos_asistencia("presente"),
+                 fg_color="green").pack(pady=2, fill="x")
+        CTkButton(btn_frame, text="Marcar Todos Ausentes", 
+                 command=lambda: self.marcar_todos_asistencia("ausente"),
+                 fg_color="red").pack(pady=2, fill="x")
+        CTkButton(btn_frame, text="Guardar Asistencia", 
+                 command=lambda: self.guardar_asistencia(cal.get_date(), dialog),
+                 fg_color="blue", height=40, font=ctk.CTkFont(weight="bold")).pack(pady=10, fill="x")
+        
+        # Estadísticas del día
+        self.stats_label = CTkLabel(left_frame, text="Estadísticas: -", 
+                                   font=ctk.CTkFont(size=12))
+        self.stats_label.pack(pady=10)
+        
+        # ========== PANEL DERECHO: Lista de estudiantes ==========
+        right_frame = CTkFrame(dialog)
+        right_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        right_frame.grid_rowconfigure(1, weight=1)
+        
+        CTkLabel(right_frame, text="Lista de Estudiantes", 
+                font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
+        
+        # Scrollable frame para estudiantes
+        self.asistencia_scroll = CTkScrollableFrame(right_frame, label_text="Marcar asistencia")
+        self.asistencia_scroll.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Cargar estudiantes y crear checkboxes
+        self.checkboxes_asistencia = {}
+        self.cargar_estudiantes_asistencia(cal.get_date())
+        
+        # Actualizar al cambiar fecha en calendario
+        def on_fecha_change(event=None):
+            self.cargar_estudiantes_asistencia(cal.get_date())
+        
+        cal.bind("<<CalendarSelected>>", on_fecha_change)
 
-    def abrir_asistencia(self):
-        messagebox.showinfo("En desarrollo", "La funcionalidad de asistencia se implementara en el siguiente paso.")
+    def cargar_estudiantes_asistencia(self, fecha_str):
+        """Carga la lista de estudiantes con sus estados de asistencia para una fecha"""
+        # Limpiar frame anterior
+        for widget in self.asistencia_scroll.winfo_children():
+            widget.destroy()
+        self.checkboxes_asistencia = {}
+        
+        estudiantes = self.db.get_estudiantes(self.current_curso)
+        if not estudiantes:
+            CTkLabel(self.asistencia_scroll, text="No hay estudiantes en este curso").pack(pady=20)
+            return
+        
+        # Cargar asistencia previa si existe
+        asistencia_previa = self.cargar_asistencia_fecha(fecha_str)
+        
+        presentes = 0
+        ausentes = 0
+        sin_marcar = 0
+        
+        for est in estudiantes:
+            est_id, nombre, grupo, email = est
+            
+            # Frame para cada estudiante
+            row = CTkFrame(self.asistencia_scroll)
+            row.pack(fill="x", pady=2, padx=5)
+            
+            # Nombre del estudiante
+            nombre_text = f"{nombre}" + (f" (G{grupo})" if grupo > 1 else "")
+            CTkLabel(row, text=nombre_text, font=ctk.CTkFont(size=12)).pack(side="left", padx=5)
+            
+            # Frame para los radio buttons
+            radio_frame = CTkFrame(row, fg_color="transparent")
+            radio_frame.pack(side="right", padx=5)
+            
+            # Variable para el estado
+            estado_var = ctk.StringVar(value=asistencia_previa.get(str(est_id), "sin_marcar"))
+            
+            # Radio button Presente
+            rb_presente = CTkRadioButton(radio_frame, text="Presente", 
+                                        variable=estado_var, value="presente",
+                                        fg_color="green", hover_color="darkgreen")
+            rb_presente.pack(side="left", padx=10)
+            
+            # Radio button Ausente
+            rb_ausente = CTkRadioButton(radio_frame, text="Ausente", 
+                                       variable=estado_var, value="ausente",
+                                       fg_color="red", hover_color="darkred")
+            rb_ausente.pack(side="left", padx=10)
+            
+            self.checkboxes_asistencia[est_id] = estado_var
+            
+            # Contar para estadísticas
+            if estado_var.get() == "presente":
+                presentes += 1
+            elif estado_var.get() == "ausente":
+                ausentes += 1
+            else:
+                sin_marcar += 1
+        
+        # Actualizar estadísticas
+        total = len(estudiantes)
+        if hasattr(self, 'stats_label'):
+            self.stats_label.configure(
+                text=f"Presentes: {presentes} | Ausentes: {ausentes} | Sin marcar: {sin_marcar}\nTotal: {total}"
+            )
+
+    def marcar_todos_asistencia(self, estado):
+        """Marca todos los estudiantes con el mismo estado"""
+        for var in self.checkboxes_asistencia.values():
+            var.set(estado)
+        # Recargar para actualizar estadísticas
+        # (simplificado - en producción optimizar)
+
+    def guardar_asistencia(self, fecha_str, dialog):
+        """Guarda el registro de asistencia"""
+        asistencia_data = {
+            "fecha": fecha_str,
+            "curso_id": self.current_curso,
+            "estudiantes": {}
+        }
+        
+        for est_id, var in self.checkboxes_asistencia.items():
+            estado = var.get()
+            if estado != "sin_marcar":
+                asistencia_data["estudiantes"][str(est_id)] = estado
+        
+        # Guardar en archivo JSON (temporal hasta tener DB)
+        archivo_asistencia = os.path.join(DATA_DIR, f"asistencia_{self.current_curso}.json")
+        
+        # Cargar datos existentes
+        todas_asistencias = {}
+        if os.path.exists(archivo_asistencia):
+            with open(archivo_asistencia, 'r', encoding='utf-8') as f:
+                todas_asistencias = json.load(f)
+        
+        # Actualizar con nueva asistencia
+        todas_asistencias[fecha_str] = asistencia_data
+        
+        # Guardar
+        with open(archivo_asistencia, 'w', encoding='utf-8') as f:
+            json.dump(todas_asistencias, f, ensure_ascii=False, indent=2)
+        
+        messagebox.showinfo("Éxito", f"Asistencia guardada para el {fecha_str}")
+        dialog.destroy()
+
+    def cargar_asistencia_fecha(self, fecha_str):
+        """Carga la asistencia de una fecha específica"""
+        archivo_asistencia = os.path.join(DATA_DIR, f"asistencia_{self.current_curso}.json")
+        
+        if os.path.exists(archivo_asistencia):
+            with open(archivo_asistencia, 'r', encoding='utf-8') as f:
+                todas_asistencias = json.load(f)
+                if fecha_str in todas_asistencias:
+                    return todas_asistencias[fecha_str].get("estudiantes", {})
+        return {}
 
     def abrir_generador_grupos(self):
-        messagebox.showinfo("En desarrollo", "La funcionalidad de generador de grupos se implementara en el siguiente paso.")
+        """Abre el generador de grupos aleatorios con funcionalidad de arrastrar"""
+        if not self.current_curso:
+            messagebox.showwarning("Advertencia", "Selecciona un curso primero")
+            return
+        
+        from random import shuffle
+        import json
+        
+        # Crear ventana
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Generador de Grupos")
+        dialog.geometry("900x700")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Frame principal
+        main_frame = CTkFrame(dialog)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # ========== PANEL SUPERIOR: Controles ==========
+        control_frame = CTkFrame(main_frame)
+        control_frame.pack(fill="x", pady=5, padx=5)
+        
+        CTkLabel(control_frame, text="Cantidad de grupos:", 
+                font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+        
+        self.num_grupos_var = ctk.StringVar(value="3")
+        entry_num = CTkEntry(control_frame, textvariable=self.num_grupos_var, width=50)
+        entry_num.pack(side="left", padx=5)
+        
+        # Opción: usar solo presentes o todos
+        self.usar_presentes_var = ctk.BooleanVar(value=False)
+        check_presentes = CTkCheckBox(control_frame, text="Solo estudiantes presentes hoy", 
+                                     variable=self.usar_presentes_var)
+        check_presentes.pack(side="left", padx=20)
+        
+        CTkButton(control_frame, text="Generar Grupos Aleatorios", 
+                 command=lambda: self.generar_grupos_aleatorios(),
+                 fg_color="green", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10)
+        
+        CTkButton(control_frame, text="Guardar Grupos", 
+                 command=lambda: self.guardar_grupos(dialog),
+                 fg_color="blue").pack(side="right", padx=10)
+        
+        # ========== PANEL CENTRAL: Grupos ==========
+        self.grupos_frame = CTkScrollableFrame(main_frame, label_text="Grupos generados")
+        self.grupos_frame.pack(fill="both", expand=True, pady=10, padx=5)
+        
+        # Diccionario para almacenar los frames y labels de cada grupo
+        self.grupos_containers = {}
+        self.estudiantes_grupos = {}
+        
+        # Cargar grupos previos si existen
+        self.cargar_grupos_previos()
 
+    def generar_grupos_aleatorios(self):
+        """Genera grupos aleatorios de estudiantes"""
+        from random import shuffle
+        
+        try:
+            num_grupos = int(self.num_grupos_var.get())
+            if num_grupos < 2:
+                messagebox.showwarning("Advertencia", "Debe haber al menos 2 grupos")
+                return
+        except ValueError:
+            messagebox.showerror("Error", "Ingresa un numero valido de grupos")
+            return
+        
+        # Obtener estudiantes
+        if self.usar_presentes_var.get():
+            # Solo presentes del dia de hoy
+            from datetime import date
+            fecha_hoy = date.today().strftime("%d/%m/%Y")
+            asistencia = self.cargar_asistencia_fecha(fecha_hoy)
+            presentes_ids = [int(k) for k, v in asistencia.items() if v == "presente"]
+            estudiantes = [e for e in self.db.get_estudiantes(self.current_curso) 
+                          if e[0] in presentes_ids]
+            if not estudiantes:
+                messagebox.showwarning("Advertencia", "No hay estudiantes presentes hoy")
+                return
+        else:
+            # Todos los estudiantes
+            estudiantes = self.db.get_estudiantes(self.current_curso)
+            if not estudiantes:
+                messagebox.showwarning("Advertencia", "No hay estudiantes en este curso")
+                return
+        
+        # Mezclar aleatoriamente
+        lista_estudiantes = list(estudiantes)
+        shuffle(lista_estudiantes)
+        
+        # Distribuir en grupos
+        self.estudiantes_grupos = {i: [] for i in range(num_grupos)}
+        for i, est in enumerate(lista_estudiantes):
+            grupo_num = i % num_grupos
+            self.estudiantes_grupos[grupo_num].append(est)
+        
+        # Mostrar grupos
+        self.mostrar_grupos_en_pantalla()
+
+    def mostrar_grupos_en_pantalla(self):
+        """Muestra los grupos generados en la interfaz con funcionalidad de arrastrar"""
+        # Limpiar frame anterior
+        for widget in self.grupos_frame.winfo_children():
+            widget.destroy()
+        self.grupos_containers = {}
+        
+        if not self.estudiantes_grupos:
+            CTkLabel(self.grupos_frame, text="Genera grupos primero").pack(pady=20)
+            return
+        
+        # Crear grid de grupos (max 3 columnas)
+        num_grupos = len(self.estudiantes_grupos)
+        cols = 3 if num_grupos >= 3 else num_grupos
+        
+        for idx in range(num_grupos):
+            row = idx // cols
+            col = idx % cols
+            
+            # Frame del grupo
+            grupo_frame = CTkFrame(self.grupos_frame, border_width=2, border_color="blue")
+            grupo_frame.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            
+            # Configurar peso para expansión
+            self.grupos_frame.grid_columnconfigure(col, weight=1)
+            
+            # Header del grupo
+            CTkLabel(grupo_frame, text=f"GRUPO {idx + 1}", 
+                    font=ctk.CTkFont(size=16, weight="bold"),
+                    text_color="blue").pack(pady=(10, 5))
+            
+            CTkLabel(grupo_frame, text=f"({len(self.estudiantes_grupos[idx])} estudiantes)", 
+                    font=ctk.CTkFont(size=10)).pack()
+            
+            # Separador
+            CTkFrame(grupo_frame, height=2, fg_color="gray").pack(fill="x", padx=5, pady=5)
+            
+            # Frame scrollable para estudiantes de este grupo
+            est_frame = CTkScrollableFrame(grupo_frame, height=200, width=250)
+            est_frame.pack(fill="both", expand=True, padx=5, pady=5)
+            
+            self.grupos_containers[idx] = est_frame
+            
+            # Mostrar estudiantes con botones para mover
+            for est in self.estudiantes_grupos[idx]:
+                est_id, nombre, grupo_num, email = est
+                
+                est_row = CTkFrame(est_frame, fg_color="transparent")
+                est_row.pack(fill="x", pady=1)
+                
+                CTkLabel(est_row, text=f"• {nombre}", 
+                        font=ctk.CTkFont(size=11)).pack(side="left", padx=2)
+                
+                # Botones para mover entre grupos
+                btn_frame = CTkFrame(est_row, fg_color="transparent")
+                btn_frame.pack(side="right")
+                
+                if idx > 0:  # Puede mover a grupo anterior
+                    CTkButton(btn_frame, text="←", width=25, 
+                             command=lambda e=est, g=idx: self.mover_estudiante_grupo(e, g, g-1),
+                             fg_color="gray", hover_color="darkgray").pack(side="left", padx=1)
+                
+                if idx < num_grupos - 1:  # Puede mover a grupo siguiente
+                    CTkButton(btn_frame, text="→", width=25,
+                             command=lambda e=est, g=idx: self.mover_estudiante_grupo(e, g, g+1),
+                             fg_color="gray", hover_color="darkgray").pack(side="left", padx=1)
+                
+                # Botón para eliminar del grupo (mover a lista de sin grupo)
+                CTkButton(btn_frame, text="×", width=25,
+                         command=lambda e=est, g=idx: self.quitar_de_grupo(e, g),
+                         fg_color="red", hover_color="darkred").pack(side="left", padx=1)
+
+    def mover_estudiante_grupo(self, estudiante, grupo_origen, grupo_destino):
+        """Mueve un estudiante de un grupo a otro"""
+        if estudiante in self.estudiantes_grupos[grupo_origen]:
+            self.estudiantes_grupos[grupo_origen].remove(estudiante)
+            self.estudiantes_grupos[grupo_destino].append(estudiante)
+            self.mostrar_grupos_en_pantalla()
+
+    def quitar_de_grupo(self, estudiante, grupo):
+        """Quita un estudiante de un grupo (lo deja sin asignar)"""
+        if estudiante in self.estudiantes_grupos[grupo]:
+            self.estudiantes_grupos[grupo].remove(estudiante)
+            # Crear grupo especial "-1" para no asignados si no existe
+            if -1 not in self.estudiantes_grupos:
+                self.estudiantes_grupos[-1] = []
+            self.estudiantes_grupos[-1].append(estudiante)
+            self.mostrar_grupos_en_pantalla()
+
+    def guardar_grupos(self, dialog):
+        """Guarda la configuración de grupos"""
+        import json
+        from datetime import datetime
+        
+        if not self.estudiantes_grupos:
+            messagebox.showwarning("Advertencia", "No hay grupos para guardar")
+            return
+        
+        # Convertir a formato guardable (solo IDs)
+        grupos_guardar = {}
+        for num, estudiantes in self.estudiantes_grupos.items():
+            if num >= 0:  # Ignorar el grupo -1 (no asignados) al guardar
+                grupos_guardar[f"grupo_{num + 1}"] = [e[0] for e in estudiantes]
+        
+        datos = {
+            "fecha_creacion": datetime.now().isoformat(),
+            "curso_id": self.current_curso,
+            "num_grupos": len([k for k in self.estudiantes_grupos.keys() if k >= 0]),
+            "grupos": grupos_guardar
+        }
+        
+        # Guardar en JSON
+        archivo = os.path.join(DATA_DIR, f"grupos_{self.current_curso}.json")
+        with open(archivo, 'w', encoding='utf-8') as f:
+            json.dump(datos, f, ensure_ascii=False, indent=2)
+        
+        messagebox.showinfo("Exito", f"Grupos guardados correctamente\nArchivo: {archivo}")
+        dialog.destroy()
+
+    def cargar_grupos_previos(self):
+        """Carga grupos previos si existen"""
+        import json
+        
+        archivo = os.path.join(DATA_DIR, f"grupos_{self.current_curso}.json")
+        if os.path.exists(archivo):
+            try:
+                with open(archivo, 'r', encoding='utf-8') as f:
+                    datos = json.load(f)
+                
+                # Reconstruir grupos desde IDs
+                todos_estudiantes = {e[0]: e for e in self.db.get_estudiantes(self.current_curso)}
+                
+                self.estudiantes_grupos = {}
+                for nombre_grupo, ids in datos.get("grupos", {}).items():
+                    num = int(nombre_grupo.split("_")[1]) - 1
+                    self.estudiantes_grupos[num] = [todos_estudiantes[eid] for eid in ids if eid in todos_estudiantes]
+                
+                self.num_grupos_var.set(str(len(self.estudiantes_grupos)))
+                self.mostrar_grupos_en_pantalla()
+                
+            except Exception as e:
+                print(f"Error cargando grupos previos: {e}")
+
+
+    def exportar_clase_pdf(self):
+        """Exporta la clase actual a PDF"""
+        if not self.current_curso:
+            messagebox.showwarning("Advertencia", "Selecciona un curso primero")
+            return
+        
+        # Verificar que los widgets existen
+        if not hasattr(self, 'entry_encabezado_clase') or not self.entry_encabezado_clase.winfo_exists():
+            messagebox.showerror("Error", "Error al acceder a los campos de la clase")
+            return
+        
+        try:
+            from reportlab.lib.pagesizes import letter, A4
+            from reportlab.lib import colors
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+            from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+        except ImportError:
+            messagebox.showerror("Error", "Necesitas instalar reportlab:\npip install reportlab")
+            return
+        
+        # Obtener valores de los campos de forma segura
+        try:
+            encabezado = self.entry_encabezado_clase.get().strip() if self.entry_encabezado_clase else ""
+            topicos = self.entry_topicos.get().strip() if hasattr(self, 'entry_topicos') and self.entry_topicos.winfo_exists() else ""
+            observaciones = self.entry_observaciones.get().strip() if hasattr(self, 'entry_observaciones') and self.entry_observaciones.winfo_exists() else ""
+            contenido = self.texto_clase.get("1.0", "end").strip() if hasattr(self, 'texto_clase') and self.texto_clase.winfo_exists() else ""
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al leer los campos: {str(e)}")
+            return
+        
+        if not encabezado:
+            encabezado = "Clase sin titulo"
+        
+        # Pedir ubicación para guardar
+        nombre_archivo = "".join(c for c in encabezado if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        nombre_archivo = nombre_archivo.replace(" ", "_")[:50] or "Clase"
+        
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
+            initialfile=f"{nombre_archivo}.pdf"
+        )
+        
+        if not filepath:
+            return
+        
+        try:
+            self.crear_pdf_clase(filepath, encabezado, topicos, observaciones, contenido)
+            messagebox.showinfo("Exito", f"PDF guardado:\n{filepath}")
+            if hasattr(self, 'status_clases_label'):
+                self.status_clases_label.configure(text=f"PDF exportado: {nombre_archivo[:30]}...")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo crear el PDF:\n{str(e)}")
+
+    def crear_pdf_clase(self, filepath, encabezado, topicos, observaciones, contenido):
+        """Crea el PDF de una clase con los datos proporcionados"""
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        
+        doc = SimpleDocTemplate(filepath, pagesize=letter,
+                               rightMargin=72, leftMargin=72,
+                               topMargin=72, bottomMargin=18)
+        
+        # Contenedor para elementos
+        elementos = []
+        
+        # Estilos
+        estilos = getSampleStyleSheet()
+        estilo_titulo = ParagraphStyle(
+            'Titulo',
+            parent=estilos['Heading1'],
+            fontSize=18,
+            textColor=colors.HexColor('#1f4788'),
+            spaceAfter=30,
+            alignment=1  # Centro
+        )
+        estilo_subtitulo = ParagraphStyle(
+            'Subtitulo',
+            parent=estilos['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#2e5c8a'),
+            spaceAfter=12
+        )
+        estilo_normal = estilos["BodyText"]
+        estilo_normal.fontSize = 11
+        estilo_normal.leading = 14
+        
+        # TITULO
+        elementos.append(Paragraph("REGISTRO DE CLASE", estilo_titulo))
+        elementos.append(Spacer(1, 0.2*inch))
+        
+        # ENCABEZADO
+        elementos.append(Paragraph(f"<b>{encabezado}</b>", estilo_subtitulo))
+        elementos.append(Spacer(1, 0.1*inch))
+        
+        # CURSO
+        curso_nombre = "Curso no seleccionado"
+        if hasattr(self, 'cursos_data'):
+            for nombre, cid in self.cursos_data.items():
+                if cid == self.current_curso:
+                    curso_nombre = nombre
+                    break
+        
+        elementos.append(Paragraph(f"<b>Curso:</b> {curso_nombre}", estilo_normal))
+        elementos.append(Paragraph(f"<b>Fecha de exportacion:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", estilo_normal))
+        elementos.append(Spacer(1, 0.2*inch))
+        
+        # TOPICOS
+        if topicos:
+            elementos.append(Paragraph("<b>TOPICOS A TRATAR:</b>", estilo_subtitulo))
+            elementos.append(Paragraph(topicos.replace('\n', '<br/>'), estilo_normal))
+            elementos.append(Spacer(1, 0.2*inch))
+        
+        # ENLACES
+        links = []
+        if hasattr(self, 'links_entries'):
+            for nombre_entry, url_entry in self.links_entries:
+                try:
+                    if nombre_entry.winfo_exists() and url_entry.winfo_exists():
+                        nombre = nombre_entry.get().strip()
+                        url = url_entry.get().strip()
+                        if nombre or url:
+                            links.append([nombre or "Sin nombre", url or "Sin URL"])
+                except:
+                    pass
+        
+        if links:
+            elementos.append(Paragraph("<b>LECTURAS ASIGNADAS:</b>", estilo_subtitulo))
+            tabla_links = Table(links, colWidths=[2.5*inch, 3.5*inch])
+            tabla_links.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            elementos.append(tabla_links)
+            elementos.append(Spacer(1, 0.2*inch))
+        
+        # CONTENIDO DE LA CLASE
+        if contenido:
+            elementos.append(Paragraph("<b>DESARROLLO DE LA CLASE:</b>", estilo_subtitulo))
+            # Convertir saltos de linea a <br/>
+            contenido_html = contenido.replace('\n', '<br/>')
+            elementos.append(Paragraph(contenido_html, estilo_normal))
+            elementos.append(Spacer(1, 0.2*inch))
+        
+        # OBSERVACIONES
+        if observaciones:
+            elementos.append(Paragraph("<b>OBSERVACIONES:</b>", estilo_subtitulo))
+            elementos.append(Paragraph(observaciones.replace('\n', '<br/>'), estilo_normal))
+        
+        # Construir PDF
+        doc.build(elementos)
+
+    def exportar_todas_clases_pdf(self):
+        """Exporta todas las clases guardadas en un solo PDF"""
+        if not self.current_curso:
+            messagebox.showwarning("Advertencia", "Selecciona un curso primero")
+            return
+        
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib import colors
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+        except ImportError:
+            messagebox.showerror("Error", "Necesitas instalar reportlab:\npip install reportlab")
+            return
+        
+        # Obtener todas las clases
+        clases = []
+        if hasattr(self.db, 'get_clases'):
+            try:
+                clases = self.db.get_clases(self.current_curso)
+            except:
+                clases = []
+        elif hasattr(self, 'clases_temp'):
+            clases = [(k, v["encabezado"]) for k, v in self.clases_temp.items() 
+                     if v.get("curso_id") == self.current_curso]
+        
+        if not clases:
+            messagebox.showwarning("Advertencia", "No hay clases guardadas para exportar")
+            return
+        
+        # Pedir ubicacion
+        curso_nombre = "Curso"
+        if hasattr(self, 'cursos_data'):
+            for nombre, cid in self.cursos_data.items():
+                if cid == self.current_curso:
+                    curso_nombre = nombre
+                    break
+        
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
+            initialfile=f"Clases_{curso_nombre.replace(' ', '_')}.pdf"
+        )
+        
+        if not filepath:
+            return
+        
+        try:
+            doc = SimpleDocTemplate(filepath, pagesize=letter,
+                                   rightMargin=72, leftMargin=72,
+                                   topMargin=72, bottomMargin=18)
+            
+            elementos = []
+            
+            # Estilos
+            estilos = getSampleStyleSheet()
+            estilo_titulo = ParagraphStyle('Titulo', parent=estilos['Heading1'], fontSize=20, 
+                                          textColor=colors.HexColor('#1f4788'), spaceAfter=30, alignment=1)
+            estilo_subtitulo = ParagraphStyle('Subtitulo', parent=estilos['Heading2'], fontSize=14,
+                                             textColor=colors.HexColor('#2e5c8a'), spaceAfter=12)
+            estilo_normal = estilos["BodyText"]
+            estilo_normal.fontSize = 11
+            
+            # Portada
+            elementos.append(Spacer(1, 2*inch))
+            elementos.append(Paragraph("REGISTRO DE CLASES", estilo_titulo))
+            elementos.append(Spacer(1, 0.5*inch))
+            elementos.append(Paragraph(f"<b>Curso:</b> {curso_nombre}", estilo_subtitulo))
+            elementos.append(Paragraph(f"<b>Total de clases:</b> {len(clases)}", estilo_normal))
+            elementos.append(Paragraph(f"<b>Fecha de exportacion:</b> {datetime.now().strftime('%d/%m/%Y')}", estilo_normal))
+            elementos.append(PageBreak())
+            
+            # Cada clase
+            for idx, (clase_id, encabezado) in enumerate(clases, 1):
+                # Obtener datos de la clase
+                clase_data = None
+                if hasattr(self.db, 'get_clase_por_id'):
+                    try:
+                        clase_data = self.db.get_clase_por_id(clase_id)
+                    except:
+                        clase_data = None
+                elif hasattr(self, 'clases_temp') and clase_id in self.clases_temp:
+                    clase_data = self.clases_temp[clase_id]
+                
+                if not clase_data:
+                    continue
+                
+                # Numero de clase
+                elementos.append(Paragraph(f"CLASE {idx}", estilo_titulo))
+                elementos.append(Paragraph(f"<b>{clase_data.get('encabezado', 'Sin titulo')}</b>", estilo_subtitulo))
+                
+                # Topicos
+                topicos = clase_data.get('topicos', '')
+                if topicos:
+                    elementos.append(Paragraph("<b>Topicos:</b> " + topicos, estilo_normal))
+                
+                # Contenido (resumido si es muy largo)
+                contenido = clase_data.get('contenido', '')
+                if contenido:
+                    if len(contenido) > 1000:
+                        contenido = contenido[:1000] + "..."
+                    elementos.append(Paragraph("<b>Desarrollo:</b><br/>" + contenido.replace('\n', '<br/>'), estilo_normal))
+                
+                # Observaciones
+                obs = clase_data.get('observaciones', '')
+                if obs:
+                    elementos.append(Paragraph("<b>Observaciones:</b> " + obs, estilo_normal))
+                
+                elementos.append(Spacer(1, 0.3*inch))
+                elementos.append(PageBreak())
+            
+            # Eliminar el ultimo PageBreak
+            if elementos and isinstance(elementos[-1], PageBreak):
+                elementos.pop()
+            
+            doc.build(elementos)
+            messagebox.showinfo("Exito", f"PDF con {len(clases)} clases guardado:\n{filepath}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo crear el PDF:\n{str(e)}")
 
 if __name__ == "__main__":
     app = GestorNotasApp()
