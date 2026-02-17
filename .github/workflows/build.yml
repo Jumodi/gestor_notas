@@ -20,7 +20,7 @@ jobs:
       
       - name: Instalar dependencias
         run: |
-          pip install pyinstaller customtkinter pillow google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client openpyxl
+          pip install pyinstaller customtkinter pillow google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client openpyxl tkcalendar
       
       - name: Compilar EXE
         run: |
