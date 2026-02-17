@@ -1,7 +1,5 @@
 name: Build Multiplatform
 
-
-
 on:
   push:
     branches: [main]
@@ -13,10 +11,10 @@ jobs:
 
     steps:
       - name: Descargar código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Instalar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
@@ -29,7 +27,7 @@ jobs:
           pyinstaller --onefile --windowed --name "GestorNotas" --hidden-import customtkinter --hidden-import PIL --hidden-import PIL._imagingtk --hidden-import sqlite3 --hidden-import google.auth --hidden-import google.auth.transport.requests --hidden-import google_auth_oauthlib.flow --hidden-import googleapiclient.discovery --hidden-import googleapiclient.http --hidden-import openpyxl main.py
       
       - name: Subir EXE como artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: GestorNotas-Windows
           path: dist/GestorNotas.exe
@@ -39,10 +37,10 @@ jobs:
 
     steps:
       - name: Descargar código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Instalar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
@@ -62,7 +60,7 @@ jobs:
           # Crear archivo Info.plist (metadatos de la app)
           cat > "GestorNotas.app/Contents/Info.plist" << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd ">
           <plist version="1.0">
           <dict>
               <key>CFBundleExecutable</key>
@@ -84,7 +82,7 @@ jobs:
           hdiutil create -volname "GestorNotas" -srcfolder "GestorNotas.app" -ov -format UDZO "GestorNotas.dmg"
       
       - name: Subir DMG como artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: GestorNotas-Mac
           path: GestorNotas.dmg
