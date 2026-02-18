@@ -178,19 +178,46 @@ class GestorNotasApp(CTk):
             self.actualizar_resumen()
 
     def load_cursos(self):
+        # Limpiar scroll
         for widget in self.cursos_scroll.winfo_children():
             widget.destroy()
+        
         cursos = self.db.get_cursos()
         self.cursos_data = {}
         self.curso_buttons = {}
+        
         if cursos:
             for curso in cursos:
                 curso_id, nombre, descripcion, total_est, total_eval = curso
                 self.cursos_data[nombre] = curso_id
+                
+                # Texto con info compacta
                 btn_text = f"{nombre}\n({total_est} est, {total_eval} eval)"
-                btn = CTkButton(self.cursos_scroll, text=btn_text, command=lambda n=nombre: self.seleccionar_curso(n), fg_color="transparent", border_width=2, border_color="gray", hover_color="gray25", anchor="w")
-                btn.pack(fill="x", pady=2, padx=5)
+                
+                # Frame contenedor para mejor control
+                btn_frame = CTkFrame(self.cursos_scroll, fg_color="transparent")
+                btn_frame.pack(fill="x", pady=2, padx=5)
+                btn_frame.grid_columnconfigure(0, weight=1)
+                
+                # Botón con wraplength para evitar cortes
+                btn = CTkButton(
+                    btn_frame, 
+                    text=btn_text, 
+                    command=lambda n=nombre: self.seleccionar_curso(n),
+                    fg_color="transparent",
+                    border_width=2,
+                    border_color="gray",
+                    hover_color="gray25",
+                    anchor="w",
+                    height=50,  # Más alto para dos líneas
+                    corner_radius=8
+                )
+                # Forzar expansión horizontal
+                btn.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+                
                 self.curso_buttons[nombre] = btn
+            
+            # Seleccionar primero
             self.seleccionar_curso(cursos[0][1])
         else:
             CTkLabel(self.cursos_scroll, text="No hay cursos").pack(pady=10)
@@ -251,19 +278,46 @@ class GestorNotasApp(CTk):
     def load_evaluaciones(self):
         if not self.current_curso:
             return
+        
+        # Limpiar scroll
         for widget in self.evals_scroll.winfo_children():
             widget.destroy()
+        
         evals = self.db.get_evaluaciones(self.current_curso)
         self.evals_data = {}
         self.eval_buttons = {}
+        
         if evals:
             for eval in evals:
-                eval_id, nombre, porcentaje, orden, fecha = eval
+                eval_id, nombre, puntos_max, orden, fecha = eval
                 self.evals_data[nombre] = eval_id
-                btn_text = f"{nombre} ({porcentaje}%)"
-                btn = CTkButton(self.evals_scroll, text=btn_text, command=lambda n=nombre: self.seleccionar_evaluacion(n), fg_color="transparent", border_width=2, border_color="gray", hover_color="gray25", anchor="w", height=30)
-                btn.pack(fill="x", pady=2, padx=5)
+                
+                # Texto: nombre en línea 1, puntos en línea 2
+                btn_text = f"{nombre}\n(Máx: {puntos_max} pts)"
+                
+                # Frame contenedor
+                btn_frame = CTkFrame(self.evals_scroll, fg_color="transparent")
+                btn_frame.pack(fill="x", pady=2, padx=5)
+                btn_frame.grid_columnconfigure(0, weight=1)
+                
+                btn = CTkButton(
+                    btn_frame,
+                    text=btn_text,
+                    command=lambda n=nombre: self.seleccionar_evaluacion(n),
+                    fg_color="transparent",
+                    border_width=2,
+                    border_color="gray",
+                    hover_color="gray25",
+                    anchor="w",
+                    height=45,
+                    corner_radius=8,
+                    font=ctk.CTkFont(size=12)  # Tamaño ligeramente menor para nombres largos
+                )
+                btn.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+                
                 self.eval_buttons[nombre] = btn
+            
+            # Seleccionar primera evaluación
             self.seleccionar_evaluacion(evals[0][1])
         else:
             CTkLabel(self.evals_scroll, text="Sin evaluaciones").pack(pady=10)
@@ -289,11 +343,11 @@ class GestorNotasApp(CTk):
                 return
             total_actual = self.db.verificar_porcentaje_total(self.current_curso)
             if total_actual + porcentaje > 100:
-                messagebox.showerror("Error", f"El total de porcentajes seria {total_actual + porcentaje}%. El maximo permitido es 100%. Porcentaje actual usado: {total_actual}%")
+                messagebox.showerror("Error", f"El total de puntos sería {total_actual + porcentaje}. El máximo permitido es 100 puntos. Puntos actuales asignados: {total_actual}")
                 return
             eval_id, error = self.db.agregar_evaluacion(self.current_curso, nombre, porcentaje)
             if eval_id:
-                messagebox.showinfo("Exito", f"Evaluacion '{nombre}' agregada ({porcentaje}%)")
+                messagebox.showinfo("Exito", f"Evaluacion '{nombre}' agregada (Máximo: {porcentaje} puntos)")
                 self.load_evaluaciones()
                 self.actualizar_config_curso()
             else:
@@ -493,88 +547,183 @@ class GestorNotasApp(CTk):
         CTkButton(dialog, text="Eliminar", command=confirmar, fg_color="red", hover_color="darkred").pack(pady=20)
 
     def load_estudiantes_notas(self):
+        """Carga los estudiantes y sus notas con alineación consistente"""
+        # Limpiar frame anterior
         for widget in self.scroll_frame.winfo_children():
             widget.destroy()
+        
         self.entries_notas = {}
+        
         if not self.current_curso:
-            CTkLabel(self.scroll_frame, text="Selecciona un curso primero", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20)
+            CTkLabel(self.scroll_frame, text="Selecciona un curso primero", 
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20)
             return
+        
         if not self.current_evaluacion:
-            CTkLabel(self.scroll_frame, text="Selecciona una evaluacion primero", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20)
+            CTkLabel(self.scroll_frame, text="Selecciona una evaluacion primero", 
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20)
             return
+        
         estudiantes = self.db.get_estudiantes(self.current_curso)
+        
         if not estudiantes:
-            CTkLabel(self.scroll_frame, text="No hay estudiantes en este curso. Agrega estudiantes usando el boton Agregar Estudiante en el menu lateral.", font=ctk.CTkFont(size=12)).pack(pady=20)
+            CTkLabel(self.scroll_frame, text="No hay estudiantes en este curso. Agrega estudiantes usando el boton Agregar Estudiante en el menu lateral.", 
+                    font=ctk.CTkFont(size=12)).pack(pady=20)
             return
+        
         evals = self.db.get_evaluaciones(self.current_curso)
         eval_info = next((e for e in evals if e[0] == self.current_evaluacion), None)
+        
         if eval_info:
             eval_nombre = eval_info[1]
             eval_porcentaje = eval_info[2]
         else:
             eval_nombre = "Evaluacion"
             eval_porcentaje = 0
+        
+        # Header info con estado de guardado
         header_info = CTkFrame(self.scroll_frame)
         header_info.pack(fill="x", padx=5, pady=5)
-        CTkLabel(header_info, text=f"Evaluacion: {eval_nombre} ({eval_porcentaje}%) - Guardado automatico", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=5)
+        
+        CTkLabel(header_info, 
+                text=f"Evaluacion: {eval_nombre} (Máx: {eval_porcentaje} pts)", 
+                font=ctk.CTkFont(size=14, weight="bold")).pack(side="left", padx=10)
+        
+        # Label de estado de guardado
+        self.guardado_status_label = CTkLabel(header_info, 
+                                              text="Estado: Listo", 
+                                              font=ctk.CTkFont(size=12),
+                                              text_color="gray")
+        self.guardado_status_label.pack(side="right", padx=10)
+        
+        # ===== HEADER DE COLUMNAS =====
         header = CTkFrame(self.scroll_frame)
         header.pack(fill="x", padx=5, pady=2)
-        header.grid_columnconfigure(0, weight=0, minsize=350)
-        header.grid_columnconfigure(1, weight=0, minsize=120)
-        header.grid_columnconfigure(2, weight=1)
-        CTkLabel(header, text="Estudiante", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, padx=(10, 5), pady=5, sticky="w")
-        CTkLabel(header, text="Nota", font=ctk.CTkFont(weight="bold")).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        CTkLabel(header, text="Observaciones", font=ctk.CTkFont(weight="bold")).grid(row=0, column=2, padx=(5, 10), pady=5, sticky="w")
+        
+        # Usar grid en lugar de pack para mejor alineación
+        header.grid_columnconfigure(0, weight=3, minsize=300)  # Nombre (expandible)
+        header.grid_columnconfigure(1, weight=0, minsize=100)  # Nota (fijo)
+        header.grid_columnconfigure(2, weight=2, minsize=200)  # Observaciones (expandible)
+        
+        # Encabezados con grid
+        CTkLabel(header, text="Estudiante", font=ctk.CTkFont(weight="bold")).grid(
+            row=0, column=0, padx=10, pady=5, sticky="w")
+        CTkLabel(header, text="Nota", font=ctk.CTkFont(weight="bold")).grid(
+            row=0, column=1, padx=10, pady=5, sticky="ew")
+        CTkLabel(header, text="Observaciones", font=ctk.CTkFont(weight="bold")).grid(
+            row=0, column=2, padx=10, pady=5, sticky="w")
+        
+        # Separador visual
+        CTkFrame(self.scroll_frame, height=2, fg_color="gray").pack(fill="x", padx=5, pady=2)
+        
+        # ===== FILAS DE ESTUDIANTES =====
         for est in estudiantes:
             est_id, nombre, grupo, email = est
+            
             row = CTkFrame(self.scroll_frame)
             row.pack(fill="x", padx=5, pady=2)
-            row.grid_columnconfigure(0, weight=0, minsize=350)
-            row.grid_columnconfigure(1, weight=0, minsize=120)
-            row.grid_columnconfigure(2, weight=1)
+            
+            # Misma configuración de columnas que el header
+            row.grid_columnconfigure(0, weight=3, minsize=300)
+            row.grid_columnconfigure(1, weight=0, minsize=100)
+            row.grid_columnconfigure(2, weight=2, minsize=200)
+            
+            # --- COLUMNA 0: Nombre ---
             nombre_text = f"{nombre}" + (f" (G{grupo})" if grupo > 1 else "")
-            CTkLabel(row, text=nombre_text).grid(row=0, column=0, padx=(10, 5), pady=2, sticky="w")
+            CTkLabel(row, text=nombre_text, font=ctk.CTkFont(size=12)).grid(
+                row=0, column=0, padx=10, pady=2, sticky="w")
+            
+            # --- COLUMNA 1: Nota ---
             nota_existente, obs_existente = self.db.get_nota(est_id, self.current_evaluacion)
-            nota_container = CTkFrame(row, fg_color="transparent", width=120, height=30)
-            nota_container.grid(row=0, column=1, padx=5, pady=2, sticky="nsew")
-            nota_container.grid_propagate(False)
+            
+            nota_container = CTkFrame(row, fg_color="transparent")
+            nota_container.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
+            
             nota_var = ctk.StringVar(value=str(nota_existente) if nota_existente is not None else "")
-            entry_nota = CTkEntry(nota_container, width=70, textvariable=nota_var, justify="center", placeholder_text="0-100")
-            entry_nota.place(relx=0.35, rely=0.5, anchor="center")
+            entry_nota = CTkEntry(nota_container, width=80, textvariable=nota_var, 
+                     justify="center", placeholder_text=f"0-{eval_porcentaje}")
+            entry_nota.pack(side="left", padx=2)
+            
+            # Indicador de estado
             estado_text = "OK" if nota_existente else "-"
             estado_color = "green" if nota_existente else "gray"
-            estado_label = CTkLabel(nota_container, text=estado_text, width=20, text_color=estado_color, font=ctk.CTkFont(size=14, weight="bold"))
-            estado_label.place(relx=0.85, rely=0.5, anchor="center")
+            estado_label = CTkLabel(nota_container, text=estado_text, width=25, 
+                                   text_color=estado_color, font=ctk.CTkFont(size=12, weight="bold"))
+            estado_label.pack(side="left", padx=2)
+            
+            # --- COLUMNA 2: Observaciones ---
             obs_var = ctk.StringVar(value=obs_existente or "")
-            entry_obs = CTkEntry(row, textvariable=obs_var, placeholder_text="Observaciones...")
-            entry_obs.grid(row=0, column=2, padx=(5, 10), pady=2, sticky="ew")
+            entry_obs = CTkEntry(row, textvariable=obs_var, placeholder_text="Observaciones...", width=150)
+            entry_obs.grid(row=0, column=2, padx=10, pady=2, sticky="ew")
+            
+            # --- BINDINGS PARA GUARDADO AUTOMÁTICO ---
             def guardar_al_salir(event, eid=est_id, nv=nota_var, ov=obs_var, el=estado_label):
                 self.guardar_nota_auto(eid, nv, ov, el)
+            
             entry_nota.bind("<FocusOut>", guardar_al_salir)
             entry_obs.bind("<FocusOut>", guardar_al_salir)
             entry_nota.bind("<Return>", guardar_al_salir)
             entry_obs.bind("<Return>", guardar_al_salir)
+            
             self.entries_notas[est_id] = (nota_var, obs_var, estado_label)
+        
         self.status_label.configure(text=f"{len(estudiantes)} estudiantes - Guardado automatico activo")
 
     def guardar_nota_auto(self, estudiante_id, nota_var, obs_var, estado_label):
+        """Guarda nota automáticamente validando que no exceda el máximo de la evaluación"""
         try:
-            nota_str = nota_var.get().strip()
-            if not nota_str:
+            puntos_str = nota_var.get().strip()
+            
+            if not puntos_str:
                 estado_label.configure(text="-", text_color="gray")
+                if hasattr(self, 'guardado_status_label'):
+                    self.guardado_status_label.configure(text="Estado: Sin cambios", text_color="gray")
                 return
-            nota = float(nota_str)
-            if not 0 <= nota <= 100:
+            
+            puntos_ingresados = float(puntos_str)
+            
+            # Obtener el máximo de puntos de esta evaluación
+            evals = self.db.get_evaluaciones(self.current_curso)
+            eval_info = next((e for e in evals if e[0] == self.current_evaluacion), None)
+            
+            if not eval_info:
                 estado_label.configure(text="ERR", text_color="red")
-                self.status_label.configure(text="Error: Nota debe ser entre 0-100", text_color="red")
+                self.status_label.configure(text="Error: Evaluación no encontrada", text_color="red")
                 return
-            self.db.guardar_nota(estudiante_id, self.current_evaluacion, nota, obs_var.get())
+                
+            puntos_maximos = eval_info[2]  # El porcentaje ahora representa puntos máximos
+            
+            # Validar que no exceda el máximo
+            if puntos_ingresados < 0:
+                estado_label.configure(text="ERR", text_color="red")
+                self.status_label.configure(text="Error: No puede ser negativo", text_color="red")
+                if hasattr(self, 'guardado_status_label'):
+                    self.guardado_status_label.configure(text="Estado: Error", text_color="red")
+                return
+                
+            if puntos_ingresados > puntos_maximos:
+                estado_label.configure(text="ERR", text_color="red")
+                self.status_label.configure(text=f"Error: Máximo {puntos_maximos} puntos", text_color="red")
+                if hasattr(self, 'guardado_status_label'):
+                    self.guardado_status_label.configure(text="Estado: Error - Excede máximo", text_color="red")
+                return
+            
+            # Guardar los puntos directamente (no el porcentaje calculado)
+            self.db.guardar_nota(estudiante_id, self.current_evaluacion, puntos_ingresados, obs_var.get())
+            
             estado_label.configure(text="OK", text_color="green")
-            self.status_label.configure(text="Nota guardada", text_color="green")
+            self.status_label.configure(text=f"Guardado: {puntos_ingresados}/{puntos_maximos} pts", text_color="green")
+            if hasattr(self, 'guardado_status_label'):
+                self.guardado_status_label.configure(text="Estado: Guardado", text_color="green")
+            
+            # Actualizar resumen después de un breve delay
             self.after(100, self.actualizar_resumen)
+            
         except ValueError:
             estado_label.configure(text="ERR", text_color="red")
-            self.status_label.configure(text="Error: Ingresa un numero valido", text_color="red")
+            self.status_label.configure(text="Error: Ingresa un número válido", text_color="red")
+            if hasattr(self, 'guardado_status_label'):
+                self.guardado_status_label.configure(text="Estado: Error de formato", text_color="red")
 
     def refrescar_vista(self):
         if self.current_evaluacion:
@@ -616,27 +765,33 @@ class GestorNotasApp(CTk):
         cursos = self.db.get_cursos()
         curso = next((c for c in cursos if c[0] == self.current_curso), None)
         evals = self.db.get_evaluaciones(self.current_curso)
-        total_porcentaje = sum(e[2] for e in evals)
+        total_puntos = sum(e[2] for e in evals)
+        
         texto = f"CONFIGURACION DEL CURSO\n"
         texto += f"{'='*50}\n\n"
         texto += f"Nombre: {curso[1]}\n"
         texto += f"Descripcion: {curso[2] or 'Ninguna'}\n\n"
-        texto += f"EVALUACIONES ({len(evals)} total, {total_porcentaje}% asignado):\n"
+        texto += f"EVALUACIONES ({len(evals)} total, {total_puntos} puntos asignados):\n"
         texto += f"{'-'*50}\n"
+        
         if evals:
             for e in evals:
-                texto += f"{e[3]}. {e[1]} - {e[2]}%\n"
-            if total_porcentaje != 100:
-                texto += f"\nADVERTENCIA: El total es {total_porcentaje}%, deberia ser 100%\n"
+                # e[0]=id, e[1]=nombre, e[2]=puntos_maximos, e[3]=orden, e[4]=fecha
+                texto += f"{e[3]}. {e[1]} - Máximo: {e[2]} puntos\n"
+            if total_puntos != 100:
+                texto += f"\n⚠️ ADVERTENCIA: El total es {total_puntos} puntos, deberia ser 100 puntos\n"
         else:
             texto += "No hay evaluaciones configuradas\n"
+        
         estudiantes = self.db.get_estudiantes(self.current_curso)
         texto += f"\n\nESTUDIANTES: {len(estudiantes)}\n"
+        
         grupos = {}
         for e in estudiantes:
             grupos[e[2]] = grupos.get(e[2], 0) + 1
         for g, count in sorted(grupos.items()):
             texto += f"  Grupo {g}: {count} estudiantes\n"
+        
         self.config_text.configure(state="normal")
         self.config_text.delete("0.0", "end")
         self.config_text.insert("0.0", texto)
@@ -657,8 +812,8 @@ class GestorNotasApp(CTk):
                 prom, _ = self.db.calcular_promedio(est[0], self.current_curso)
                 promedios.append(prom)
             import statistics
-            texto += f"Promedio general del curso: {statistics.mean(promedios):.2f}\n"
-            texto += f"Nota maxima: {max(promedios):.2f}\n"
+            texto += f"PROMEDIO GENERAL (suma de puntos): {statistics.mean(promedios):.2f}/100\n"
+            texto += f"Nota máxima: {max(promedios):.2f} | Nota mínima: {min(promedios):.2f}\n"
             texto += f"Nota minima: {min(promedios):.2f}\n"
             texto += f"Mediana: {statistics.median(promedios):.2f}\n"
             texto += f"Desviacion estandar: {statistics.stdev(promedios) if len(promedios) > 1 else 0:.2f}\n\n"
@@ -763,10 +918,10 @@ Deseas abrir la consola de Google Cloud ahora?"""
     def setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
-        self.sidebar = CTkFrame(self, width=300, corner_radius=0)
+        self.sidebar = CTkFrame(self, width=350, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_rowconfigure(0, weight=1)
-        self.sidebar_scroll = CTkScrollableFrame(self.sidebar, width=280, height=800)
+        self.sidebar_scroll = CTkScrollableFrame(self.sidebar, width=330, height=800)
         self.sidebar_scroll.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         self.title_label = CTkLabel(self.sidebar_scroll, text="Gestor de Notas", font=ctk.CTkFont(size=20, weight="bold"))
         self.title_label.pack(pady=(0, 10))
