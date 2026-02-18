@@ -815,65 +815,154 @@ Deseas abrir la consola de Google Cloud ahora?"""
         self.tabview = CTkTabview(self.main_frame)
         self.tabview.grid(row=0, column=0, sticky="nsew")
         self.tab_notas = self.tabview.add("Registro de Notas")
+        self.tab_clases = self.tabview.add("Control de Clases")
         self.tab_config = self.tabview.add("Configuracion del Curso")
         self.tab_resumen = self.tabview.add("Resumen y Estadisticas")
-        self.tab_clases = self.tabview.add("Control de Clases")
+        
         self.setup_tab_notas()
+        self.setup_tab_clases()
         self.setup_tab_config()
         self.setup_tab_resumen()
-        self.setup_tab_clases()
+        
 
     def setup_tab_clases(self):
+        """Configura la pestaña de Control de Clases con scroll"""
         self.tab_clases.grid_columnconfigure(0, weight=3)
         self.tab_clases.grid_columnconfigure(1, weight=1)
         self.tab_clases.grid_rowconfigure(0, weight=1)
-        self.clases_content_frame = CTkFrame(self.tab_clases)
-        self.clases_content_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        
+        # SCROLLABLE FRAME PRINCIPAL para todo el contenido
+        scroll_principal = CTkScrollableFrame(self.tab_clases)
+        scroll_principal.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        scroll_principal.grid_columnconfigure(0, weight=1)
+        
+        # ========== CONTENIDO DE LA CLASE (dentro del scroll) ==========
+        self.clases_content_frame = CTkFrame(scroll_principal)
+        self.clases_content_frame.pack(fill="x", padx=5, pady=5)
         self.clases_content_frame.grid_columnconfigure(0, weight=1)
-        CTkLabel(self.clases_content_frame, text="Encabezado de la Clase", font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5), padx=10, anchor="w")
-        self.entry_encabezado_clase = CTkEntry(self.clases_content_frame, placeholder_text="Ej: Clase 1 - Introduccion al curso - Fecha: DD/MM/AAAA", height=35, font=ctk.CTkFont(size=14))
+        
+        # --- Encabezado de la clase ---
+        CTkLabel(self.clases_content_frame, text="Encabezado de la Clase", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5), padx=10, anchor="w")
+        
+        self.entry_encabezado_clase = CTkEntry(self.clases_content_frame, 
+                                               placeholder_text="Ej: Clase 1 - Introduccion al curso - Fecha: DD/MM/AAAA",
+                                               height=35, font=ctk.CTkFont(size=14))
         self.entry_encabezado_clase.pack(fill="x", padx=10, pady=5)
-        CTkLabel(self.clases_content_frame, text="Topicos que se trataran:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
-        self.entry_topicos = CTkEntry(self.clases_content_frame, placeholder_text="Ej: 1. Presentacion del silabo, 2. Conceptos basicos, 3. Dinamica grupal...", height=35)
+        
+        # --- Tópicos a tratar ---
+        CTkLabel(self.clases_content_frame, text="Topicos que se trataran:", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
+        self.entry_topicos = CTkEntry(self.clases_content_frame, 
+                                     placeholder_text="Ej: 1. Presentacion del silabo, 2. Conceptos basicos, 3. Dinamica grupal...",
+                                     height=35)
         self.entry_topicos.pack(fill="x", padx=10, pady=5)
-        CTkLabel(self.clases_content_frame, text="Enlaces de Lecturas Asignadas:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
+        # --- Enlaces de lecturas ---
+        CTkLabel(self.clases_content_frame, text="Enlaces de Lecturas Asignadas:", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
         self.frame_links = CTkFrame(self.clases_content_frame)
         self.frame_links.pack(fill="x", padx=10, pady=5)
+        
         self.links_entries = []
-        CTkButton(self.clases_content_frame, text="Agregar Enlace", command=self.agregar_campo_link, fg_color="blue").pack(pady=5, padx=10, anchor="w")
+        
+        CTkButton(self.clases_content_frame, text="Agregar Enlace", 
+                 command=self.agregar_campo_link, fg_color="blue").pack(pady=5, padx=10, anchor="w")
+        
         self.agregar_campo_link()
-        CTkLabel(self.clases_content_frame, text="Desarrollo de la Clase (Notas):", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
+        # --- Contenido/Notas de la clase ---
+        CTkLabel(self.clases_content_frame, text="Desarrollo de la Clase (Notas):", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
         toolbar_frame = CTkFrame(self.clases_content_frame, fg_color="transparent")
         toolbar_frame.pack(fill="x", padx=10, pady=2)
-        CTkButton(toolbar_frame, text="Negrita", width=80, command=lambda: self.aplicar_formato_texto("bold")).pack(side="left", padx=2)
-        CTkButton(toolbar_frame, text="Cursiva", width=80, command=lambda: self.aplicar_formato_texto("italic")).pack(side="left", padx=2)
-        CTkButton(toolbar_frame, text="Subrayado", width=80, command=lambda: self.aplicar_formato_texto("underline")).pack(side="left", padx=2)
-        self.texto_clase = ctk.CTkTextbox(self.clases_content_frame, wrap="word", font=ctk.CTkFont(size=12), height=250)
-        self.texto_clase.pack(fill="both", expand=True, padx=10, pady=5)
-        CTkLabel(self.clases_content_frame, text="Observaciones / Recordatorios:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
-        self.entry_observaciones = CTkEntry(self.clases_content_frame, placeholder_text="Ej: Traer material para proxima clase, recordar tarea, etc.", height=50)
+        
+        CTkButton(toolbar_frame, text="Negrita", width=80, 
+                 command=lambda: self.aplicar_formato_texto("bold")).pack(side="left", padx=2)
+        CTkButton(toolbar_frame, text="Cursiva", width=80, 
+                 command=lambda: self.aplicar_formato_texto("italic")).pack(side="left", padx=2)
+        CTkButton(toolbar_frame, text="Subrayado", width=80, 
+                 command=lambda: self.aplicar_formato_texto("underline")).pack(side="left", padx=2)
+        
+        self.texto_clase = ctk.CTkTextbox(self.clases_content_frame, wrap="word", 
+                                         font=ctk.CTkFont(size=12), height=250)
+        self.texto_clase.pack(fill="x", padx=10, pady=5)
+        
+        # --- Observaciones/Recordatorios ---
+        CTkLabel(self.clases_content_frame, text="Observaciones / Recordatorios:", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        
+        self.entry_observaciones = CTkEntry(self.clases_content_frame, 
+                                           placeholder_text="Ej: Traer material para proxima clase, recordar tarea, etc.",
+                                           height=50)
         self.entry_observaciones.pack(fill="x", padx=10, pady=5)
+        
+        # --- Botones de guardar y exportar (AHORA DENTRO DEL SCROLL) ---
         btn_frame = CTkFrame(self.clases_content_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=10, pady=15)
-        CTkButton(btn_frame, text="Guardar Clase", command=self.guardar_clase, fg_color="green", height=40).pack(side="left", padx=5, fill="x", expand=True)
-        CTkButton(btn_frame, text="Exportar esta clase a PDF", command=self.exportar_clase_pdf, fg_color="blue", height=40).pack(side="left", padx=5, fill="x", expand=True)
-        CTkButton(btn_frame, text="Exportar TODAS las clases", command=self.exportar_todas_clases_pdf, fg_color="purple", height=40).pack(side="left", padx=5, fill="x", expand=True)
+        
+        CTkButton(btn_frame, text="Guardar Clase", command=self.guardar_clase,
+                 fg_color="green", height=40).pack(side="left", padx=5, fill="x", expand=True)
+        CTkButton(btn_frame, text="Exportar esta clase a PDF", command=self.exportar_clase_pdf,
+                 fg_color="blue", height=40).pack(side="left", padx=5, fill="x", expand=True)
+        CTkButton(btn_frame, text="Exportar TODAS las clases", command=self.exportar_todas_clases_pdf,
+                 fg_color="purple", height=40).pack(side="left", padx=5, fill="x", expand=True)
+        
+        # ========== PANEL DERECHO: Herramientas (SIN SCROLL, fijo) ==========
         self.clases_tools_frame = CTkFrame(self.tab_clases)
         self.clases_tools_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-        CTkLabel(self.clases_tools_frame, text="Clases Guardadas", font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5), padx=10)
-        self.combo_clases_guardadas = CTkOptionMenu(self.clases_tools_frame, values=["-- Nueva Clase --"], command=self.cargar_clase_guardada)
+        
+        # --- Selector de clase existente ---
+        CTkLabel(self.clases_tools_frame, text="Clases Guardadas", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5), padx=10)
+        
+        self.combo_clases_guardadas = CTkOptionMenu(self.clases_tools_frame, 
+                                                    values=["-- Nueva Clase --"],
+                                                    command=self.cargar_clase_guardada)
         self.combo_clases_guardadas.pack(fill="x", padx=10, pady=5)
-        CTkButton(self.clases_tools_frame, text="Eliminar Clase Seleccionada", command=self.eliminar_clase_guardada, fg_color="red").pack(pady=5, padx=10, fill="x")
+        
+        # Botón de actualizar lista
+        CTkButton(self.clases_tools_frame, text="Actualizar Lista", 
+                 command=self.cargar_lista_clases, fg_color="gray").pack(pady=2, padx=10, fill="x")
+        
+        CTkButton(self.clases_tools_frame, text="Eliminar Clase Seleccionada", 
+                 command=self.eliminar_clase_guardada, fg_color="red").pack(pady=5, padx=10, fill="x")
+        
         CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
-        CTkLabel(self.clases_tools_frame, text="Control de Asistencia", font=ctk.CTkFont(weight="bold")).pack(pady=5, padx=10)
-        CTkButton(self.clases_tools_frame, text="Registrar Asistencia", command=self.abrir_asistencia, height=50, fg_color="orange", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10, padx=10, fill="x")
+        
+        # --- Botón de Asistencia ---
+        CTkLabel(self.clases_tools_frame, text="Control de Asistencia", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=5, padx=10)
+        
+        CTkButton(self.clases_tools_frame, text="Registrar Asistencia", 
+                 command=self.abrir_asistencia, height=50, fg_color="orange",
+                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10, padx=10, fill="x")
+        
         CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
-        CTkLabel(self.clases_tools_frame, text="Generador de Grupos", font=ctk.CTkFont(weight="bold")).pack(pady=5, padx=10)
-        CTkButton(self.clases_tools_frame, text="Crear Grupos Aleatorios", command=self.abrir_generador_grupos, height=50, fg_color="teal", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10, padx=10, fill="x")
+        
+        # --- Botón de Agrupamiento Aleatorio ---
+        CTkLabel(self.clases_tools_frame, text="Generador de Grupos", 
+                font=ctk.CTkFont(weight="bold")).pack(pady=5, padx=10)
+        
+        CTkButton(self.clases_tools_frame, text="Crear Grupos Aleatorios", 
+                 command=self.abrir_generador_grupos, height=50, fg_color="teal",
+                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10, padx=10, fill="x")
+        
         CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
-        self.status_clases_label = CTkLabel(self.clases_tools_frame, text="Estado: Listo", font=ctk.CTkFont(size=12))
+        
+        # --- Estado ---
+        self.status_clases_label = CTkLabel(self.clases_tools_frame, 
+                                             text="Estado: Listo", 
+                                             font=ctk.CTkFont(size=12))
         self.status_clases_label.pack(pady=20)
+        
+        # Cargar clases existentes al iniciar
         self.cargar_lista_clases()
+        
+        # Bindings para guardado automático
         self.entry_encabezado_clase.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
         self.entry_topicos.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
         self.entry_observaciones.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
@@ -920,25 +1009,43 @@ Deseas abrir la consola de Google Cloud ahora?"""
             self.guardar_clase(silencioso=True)
 
     def guardar_clase(self, silencioso=False):
+        """Guarda la clase actual en archivo JSON"""
         if not self.current_curso:
             if not silencioso:
                 messagebox.showwarning("Advertencia", "Selecciona un curso primero")
             return
+        
         encabezado = self.entry_encabezado_clase.get().strip()
         topicos = self.entry_topicos.get().strip()
         observaciones = self.entry_observaciones.get().strip()
         contenido = self.texto_clase.get("1.0", "end").strip()
+        
+        # Recopilar enlaces
         links = []
         for nombre_entry, url_entry in self.links_entries:
-            nombre = nombre_entry.get().strip()
-            url = url_entry.get().strip()
-            if nombre or url:
-                links.append({"nombre": nombre, "url": url})
+            try:
+                if nombre_entry.winfo_exists() and url_entry.winfo_exists():
+                    nombre = nombre_entry.get().strip()
+                    url = url_entry.get().strip()
+                    if nombre or url:
+                        links.append({"nombre": nombre, "url": url})
+            except:
+                pass
+        
+        # Si no hay encabezado, usar uno por defecto con fecha
         if not encabezado:
             from datetime import datetime
             encabezado = f"Clase del {datetime.now().strftime('%d/%m/%Y')}"
+            self.entry_encabezado_clase.delete(0, "end")
             self.entry_encabezado_clase.insert(0, encabezado)
+        
+        # Crear ID único si es nueva clase
+        if not hasattr(self, 'clase_actual_id') or not self.clase_actual_id:
+            from datetime import datetime
+            self.clase_actual_id = f"clase_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
         datos_clase = {
+            "id": self.clase_actual_id,
             "encabezado": encabezado,
             "topicos": topicos,
             "links": links,
@@ -947,70 +1054,134 @@ Deseas abrir la consola de Google Cloud ahora?"""
             "curso_id": self.current_curso,
             "fecha_modificacion": datetime.now().isoformat()
         }
-        if hasattr(self.db, 'guardar_clase'):
-            clase_id = self.db.guardar_clase(datos_clase, getattr(self, 'clase_actual_id', None))
-            self.clase_actual_id = clase_id
-            if not silencioso:
-                messagebox.showinfo("Exito", "Clase guardada correctamente")
-                self.status_clases_label.configure(text=f"Guardado: {encabezado[:30]}...")
-                self.cargar_lista_clases()
-        else:
+        
+        # GUARDAR EN ARCHIVO JSON
+        try:
+            archivo_clases = os.path.join(DATA_DIR, f"clases_curso_{self.current_curso}.json")
+            
+            # Cargar clases existentes
+            todas_clases = {}
+            if os.path.exists(archivo_clases):
+                with open(archivo_clases, 'r', encoding='utf-8') as f:
+                    todas_clases = json.load(f)
+            
+            # Guardar o actualizar esta clase
+            todas_clases[self.clase_actual_id] = datos_clase
+            
+            # Escribir archivo
+            with open(archivo_clases, 'w', encoding='utf-8') as f:
+                json.dump(todas_clases, f, ensure_ascii=False, indent=2)
+            
+            # Actualizar lista en memoria
             if not hasattr(self, 'clases_temp'):
                 self.clases_temp = {}
-            self.clase_actual_id = self.clase_actual_id or f"temp_{datetime.now().strftime('%Y%m%d%H%M%S')}"
             self.clases_temp[self.clase_actual_id] = datos_clase
+            
             if not silencioso:
-                messagebox.showinfo("Exito", "Clase guardada (modo temporal)")
+                messagebox.showinfo("Exito", f"Clase guardada correctamente:\n{encabezado[:50]}")
+                self.status_clases_label.configure(text=f"Guardado: {encabezado[:30]}...")
+                self.cargar_lista_clases()
+                
+        except Exception as e:
+            if not silencioso:
+                messagebox.showerror("Error", f"No se pudo guardar la clase:\n{str(e)}")
 
     def cargar_lista_clases(self):
         if not self.current_curso:
             return
+        
+        # Cargar desde archivo JSON
+        archivo_clases = os.path.join(DATA_DIR, f"clases_curso_{self.current_curso}.json")
         clases = []
-        if hasattr(self.db, 'get_clases'):
-            clases = self.db.get_clases(self.current_curso)
+        
+        if os.path.exists(archivo_clases):
+            try:
+                with open(archivo_clases, 'r', encoding='utf-8') as f:
+                    todas_clases = json.load(f)
+                    for clase_id, datos in todas_clases.items():
+                        clases.append((clase_id, datos.get("encabezado", "Sin titulo")))
+                        # Actualizar memoria también
+                        if not hasattr(self, 'clases_temp'):
+                            self.clases_temp = {}
+                        self.clases_temp[clase_id] = datos
+            except Exception as e:
+                print(f"Error cargando clases: {e}")
+        
+        # También revisar memoria
         elif hasattr(self, 'clases_temp'):
-            clases = [(k, v["encabezado"]) for k, v in self.clases_temp.items() if v.get("curso_id") == self.current_curso]
+            clases = [(k, v["encabezado"]) for k, v in self.clases_temp.items() 
+                     if v.get("curso_id") == self.current_curso]
+        
         valores = ["-- Nueva Clase --"]
         self.clases_dict = {"-- Nueva Clase --": None}
+        
         for clase_id, encabezado in clases:
             display = encabezado[:50] + "..." if len(encabezado) > 50 else encabezado
             valores.append(display)
             self.clases_dict[display] = clase_id
-        self.combo_clases_guardadas.configure(values=valores)
-        self.combo_clases_guardadas.set("-- Nueva Clase --")
+        
+        if hasattr(self, 'combo_clases_guardadas') and self.combo_clases_guardadas.winfo_exists():
+            self.combo_clases_guardadas.configure(values=valores)
+            self.combo_clases_guardadas.set("-- Nueva Clase --")
 
     def cargar_clase_guardada(self, seleccion):
+        """Carga una clase guardada en los campos"""
         if seleccion == "-- Nueva Clase --":
             self.limpiar_campos_clase()
             self.clase_actual_id = None
             return
+        
         clase_id = self.clases_dict.get(seleccion)
         if not clase_id:
             return
+        
+        # Buscar en archivo primero, luego en memoria
         clase_data = None
-        if hasattr(self.db, 'get_clase_por_id'):
-            clase_data = self.db.get_clase_por_id(clase_id)
-        elif hasattr(self, 'clases_temp') and clase_id in self.clases_temp:
+        archivo_clases = os.path.join(DATA_DIR, f"clases_curso_{self.current_curso}.json")
+        
+        if os.path.exists(archivo_clases):
+            try:
+                with open(archivo_clases, 'r', encoding='utf-8') as f:
+                    todas_clases = json.load(f)
+                    clase_data = todas_clases.get(clase_id)
+            except:
+                pass
+        
+        # Si no está en archivo, buscar en memoria
+        if not clase_data and hasattr(self, 'clases_temp') and clase_id in self.clases_temp:
             clase_data = self.clases_temp[clase_id]
+        
         if clase_data:
             self.clase_actual_id = clase_id
-            self.entry_encabezado_clase.delete(0, "end")
-            self.entry_encabezado_clase.insert(0, clase_data.get("encabezado", ""))
-            self.entry_topicos.delete(0, "end")
-            self.entry_topicos.insert(0, clase_data.get("topicos", ""))
-            self.entry_observaciones.delete(0, "end")
-            self.entry_observaciones.insert(0, clase_data.get("observaciones", ""))
-            self.texto_clase.delete("1.0", "end")
-            self.texto_clase.insert("1.0", clase_data.get("contenido", ""))
-            for widget in self.frame_links.winfo_children():
-                widget.destroy()
-            self.links_entries = []
-            for link in clase_data.get("links", []):
-                self.agregar_campo_link()
-                if self.links_entries:
-                    self.links_entries[-1][0].insert(0, link.get("nombre", ""))
-                    self.links_entries[-1][1].insert(0, link.get("url", ""))
-            self.status_clases_label.configure(text=f"Cargada: {clase_data.get('encabezado', '')[:30]}...")
+            
+            # Limpiar y cargar campos de forma segura
+            try:
+                self.entry_encabezado_clase.delete(0, "end")
+                self.entry_encabezado_clase.insert(0, clase_data.get("encabezado", ""))
+                
+                self.entry_topicos.delete(0, "end")
+                self.entry_topicos.insert(0, clase_data.get("topicos", ""))
+                
+                self.entry_observaciones.delete(0, "end")
+                self.entry_observaciones.insert(0, clase_data.get("observaciones", ""))
+                
+                self.texto_clase.delete("1.0", "end")
+                self.texto_clase.insert("1.0", clase_data.get("contenido", ""))
+                
+                # Limpiar y recrear links
+                for widget in self.frame_links.winfo_children():
+                    widget.destroy()
+                self.links_entries = []
+                
+                for link in clase_data.get("links", []):
+                    self.agregar_campo_link()
+                    if self.links_entries:
+                        self.links_entries[-1][0].insert(0, link.get("nombre", ""))
+                        self.links_entries[-1][1].insert(0, link.get("url", ""))
+                
+                self.status_clases_label.configure(text=f"Cargada: {clase_data.get('encabezado', '')[:30]}...")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al cargar la clase: {str(e)}")
 
     def limpiar_campos_clase(self):
         self.entry_encabezado_clase.delete(0, "end")
