@@ -20,11 +20,11 @@ jobs:
       
       - name: Instalar dependencias
         run: |
-          pip install pyinstaller customtkinter pillow google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client openpyxl tkcalendar
+          pip install pyinstaller customtkinter pillow google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client openpyxl tkcalendar reportlab
       
       - name: Compilar EXE
         run: |
-          pyinstaller --onefile --windowed --name "GestorNotas" --hidden-import customtkinter --hidden-import PIL --hidden-import PIL._imagingtk --hidden-import sqlite3 --hidden-import google.auth --hidden-import google.auth.transport.requests --hidden-import google_auth_oauthlib.flow --hidden-import googleapiclient.discovery --hidden-import googleapiclient.http --hidden-import openpyxl main.py
+          pyinstaller --onefile --windowed --name "GestorNotas" --hidden-import customtkinter --hidden-import PIL --hidden-import PIL._imagingtk --hidden-import sqlite3 --hidden-import google.auth --hidden-import google.auth.transport.requests --hidden-import google_auth_oauthlib.flow --hidden-import googleapiclient.discovery --hidden-import googleapiclient.http --hidden-import openpyxl --hidden-import reportlab --hidden-import reportlab.pdfgen --hidden-import reportlab.lib --hidden-import reportlab.lib.pagesizes --hidden-import reportlab.platypus main.py
       
       - name: Subir EXE como artifact
         uses: actions/upload-artifact@v4
@@ -46,11 +46,11 @@ jobs:
       
       - name: Instalar dependencias
         run: |
-          pip3 install pyinstaller customtkinter pillow google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client openpyxl
+          pip3 install pyinstaller customtkinter pillow google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client openpyxl reportlab
       
       - name: Compilar APP
         run: |
-          pyinstaller --onefile --windowed --name "GestorNotas" --hidden-import customtkinter --hidden-import PIL --hidden-import PIL._imagingtk --hidden-import sqlite3 --hidden-import google.auth --hidden-import google.auth.transport.requests --hidden-import google_auth_oauthlib.flow --hidden-import googleapiclient.discovery --hidden-import googleapiclient.http --hidden-import openpyxl main.py
+          pyinstaller --onefile --windowed --name "GestorNotas" --hidden-import customtkinter --hidden-import PIL --hidden-import PIL._imagingtk --hidden-import sqlite3 --hidden-import google.auth --hidden-import google.auth.transport.requests --hidden-import google_auth_oauthlib.flow --hidden-import googleapiclient.discovery --hidden-import googleapiclient.http --hidden-import openpyxl --hidden-import reportlab --hidden-import reportlab.pdfgen --hidden-import reportlab.lib --hidden-import reportlab.lib.pagesizes --hidden-import reportlab.platypus main.py
           
           # Crear estructura .app de macOS
           mkdir -p "GestorNotas.app/Contents/MacOS"

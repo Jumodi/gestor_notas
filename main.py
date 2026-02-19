@@ -202,7 +202,7 @@ class GestorNotasApp(CTk):
                 btn_frame.pack(fill="x", pady=2, padx=5)
                 btn_frame.grid_columnconfigure(0, weight=1)
                 
-                # Botón con wraplength para evitar cortes
+                # Botón con wraplength 
                 btn = CTkButton(
                     btn_frame, 
                     text=btn_text, 
@@ -212,7 +212,7 @@ class GestorNotasApp(CTk):
                     border_color="gray",
                     hover_color="gray25",
                     anchor="w",
-                    height=50,  # Más alto para dos líneas
+                    height=50,  
                     corner_radius=8
                 )
                 # Forzar expansión horizontal
@@ -314,7 +314,7 @@ class GestorNotasApp(CTk):
                     anchor="w",
                     height=45,
                     corner_radius=8,
-                    font=ctk.CTkFont(size=12)  # Tamaño ligeramente menor para nombres largos
+                    font=ctk.CTkFont(size=12) 
                 )
                 btn.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
                 
@@ -603,7 +603,7 @@ class GestorNotasApp(CTk):
         header = CTkFrame(self.scroll_frame)
         header.pack(fill="x", padx=5, pady=2)
         
-        # Usar grid en lugar de pack para mejor alineación
+        #  grid 
         header.grid_columnconfigure(0, weight=3, minsize=300)  # Nombre (expandible)
         header.grid_columnconfigure(1, weight=0, minsize=100)  # Nota (fijo)
         header.grid_columnconfigure(2, weight=2, minsize=200)  # Observaciones (expandible)
@@ -659,7 +659,7 @@ class GestorNotasApp(CTk):
             entry_obs = CTkEntry(row, textvariable=obs_var, placeholder_text="Observaciones...", width=150)
             entry_obs.grid(row=0, column=2, padx=10, pady=2, sticky="ew")
             
-            # --- BINDINGS PARA GUARDADO AUTOMÁTICO ---
+            # --- GUARDADO AUTOMÁTICO ---
             def guardar_al_salir(event, eid=est_id, nv=nota_var, ov=obs_var, el=estado_label):
                 self.guardar_nota_auto(eid, nv, ov, el)
             
@@ -694,7 +694,7 @@ class GestorNotasApp(CTk):
                 self.status_label.configure(text="Error: Evaluación no encontrada", text_color="red")
                 return
                 
-            puntos_maximos = eval_info[2]  # El porcentaje ahora representa puntos máximos
+            puntos_maximos = eval_info[2]  
             
             # Validar que no exceda el máximo
             if puntos_ingresados < 0:
@@ -711,7 +711,7 @@ class GestorNotasApp(CTk):
                     self.guardado_status_label.configure(text="Estado: Error - Excede máximo", text_color="red")
                 return
             
-            # Guardar los puntos directamente (no el porcentaje calculado)
+            # Guardar los puntos directamente
             self.db.guardar_nota(estudiante_id, self.current_evaluacion, puntos_ingresados, obs_var.get())
             
             estado_label.configure(text="OK", text_color="green")
@@ -719,7 +719,7 @@ class GestorNotasApp(CTk):
             if hasattr(self, 'guardado_status_label'):
                 self.guardado_status_label.configure(text="Estado: Guardado", text_color="green")
             
-            # Actualizar resumen después de un breve delay
+            # Actualizar resumen delay
             self.after(100, self.actualizar_resumen)
             
         except ValueError:
@@ -989,12 +989,12 @@ Deseas abrir la consola de Google Cloud ahora?"""
         self.tab_clases.grid_columnconfigure(1, weight=1)
         self.tab_clases.grid_rowconfigure(0, weight=1)
         
-        # SCROLLABLE FRAME PRINCIPAL para todo el contenido
+        #  FRAME SCROLLABLE PRINCIPAL para todo el contenido
         scroll_principal = CTkScrollableFrame(self.tab_clases)
         scroll_principal.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         scroll_principal.grid_columnconfigure(0, weight=1)
         
-        # ========== CONTENIDO DE LA CLASE (dentro del scroll) ==========
+        # ========== CONTENIDO DE LA CLASE  ==========
         self.clases_content_frame = CTkFrame(scroll_principal)
         self.clases_content_frame.pack(fill="x", padx=5, pady=5)
         self.clases_content_frame.grid_columnconfigure(0, weight=1)
@@ -1008,7 +1008,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
                                                height=35, font=ctk.CTkFont(size=14))
         self.entry_encabezado_clase.pack(fill="x", padx=10, pady=5)
         
-        # --- Tópicos a tratar ---
+        # --- Tópicos por tratar ---
         CTkLabel(self.clases_content_frame, text="Topicos que se trataran:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
         
@@ -1058,7 +1058,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
                                            height=50)
         self.entry_observaciones.pack(fill="x", padx=10, pady=5)
         
-        # --- Botones de guardar y exportar (AHORA DENTRO DEL SCROLL) ---
+        # --- Botones de guardar y exportar  ---
         btn_frame = CTkFrame(self.clases_content_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=10, pady=15)
         
@@ -1069,7 +1069,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
         CTkButton(btn_frame, text="Exportar TODAS las clases", command=self.exportar_todas_clases_pdf,
                  fg_color="purple", height=40).pack(side="left", padx=5, fill="x", expand=True)
         
-        # ========== PANEL DERECHO: Herramientas (SIN SCROLL, fijo) ==========
+        # ========== PANEL DERECHO: Herramientas  ==========
         self.clases_tools_frame = CTkFrame(self.tab_clases)
         self.clases_tools_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
         
@@ -1167,7 +1167,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
             self.guardar_clase(silencioso=True)
 
     def guardar_clase(self, silencioso=False):
-        """Guarda la clase actual en archivo JSON"""
+        """Guarda la clase actual en la base de datos SQLite"""
         if not self.current_curso:
             if not silencioso:
                 messagebox.showwarning("Advertencia", "Selecciona un curso primero")
@@ -1197,46 +1197,43 @@ Deseas abrir la consola de Google Cloud ahora?"""
             self.entry_encabezado_clase.delete(0, "end")
             self.entry_encabezado_clase.insert(0, encabezado)
         
-        # Crear ID único si es nueva clase
-        if not hasattr(self, 'clase_actual_id') or not self.clase_actual_id:
-            from datetime import datetime
-            self.clase_actual_id = f"clase_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # Determinar si es nueva clase o actualización
+        es_nueva = not hasattr(self, 'clase_actual_id') or not self.clase_actual_id
         
-        datos_clase = {
-            "id": self.clase_actual_id,
-            "encabezado": encabezado,
-            "topicos": topicos,
-            "links": links,
-            "contenido": contenido,
-            "observaciones": observaciones,
-            "curso_id": self.current_curso,
-            "fecha_modificacion": datetime.now().isoformat()
-        }
-        
-        # GUARDAR EN ARCHIVO JSON
         try:
-            archivo_clases = os.path.join(DATA_DIR, f"clases_curso_{self.current_curso}.json")
+            if es_nueva:
+                # Crear nueva clase en la base de datos
+                clase_id, error = self.db.crear_clase(
+                    self.current_curso, 
+                    encabezado, 
+                    topicos, 
+                    contenido, 
+                    observaciones
+                )
+                if error:
+                    raise Exception(error)
+                self.clase_actual_id = clase_id
+            else:
+                # Actualizar clase existente
+                success, error = self.db.actualizar_clase(
+                    self.clase_actual_id,
+                    encabezado=encabezado,
+                    topicos=topicos,
+                    contenido=contenido,
+                    observaciones=observaciones
+                )
+                if not success:
+                    raise Exception(error)
+                # Eliminar enlaces antiguos y agregar nuevos
+                self.db.eliminar_links_clase(self.clase_actual_id)
             
-            # Cargar clases existentes
-            todas_clases = {}
-            if os.path.exists(archivo_clases):
-                with open(archivo_clases, 'r', encoding='utf-8') as f:
-                    todas_clases = json.load(f)
-            
-            # Guardar o actualizar esta clase
-            todas_clases[self.clase_actual_id] = datos_clase
-            
-            # Escribir archivo
-            with open(archivo_clases, 'w', encoding='utf-8') as f:
-                json.dump(todas_clases, f, ensure_ascii=False, indent=2)
-            
-            # Actualizar lista en memoria
-            if not hasattr(self, 'clases_temp'):
-                self.clases_temp = {}
-            self.clases_temp[self.clase_actual_id] = datos_clase
+            # Guardar enlaces
+            if self.clase_actual_id and links:
+                for link in links:
+                    self.db.agregar_link_clase(self.clase_actual_id, link["nombre"], link["url"])
             
             if not silencioso:
-                messagebox.showinfo("Exito", f"Clase guardada correctamente:\n{encabezado[:50]}")
+                messagebox.showinfo("Éxito", f"Clase guardada correctamente:\n{encabezado[:50]}")
                 self.status_clases_label.configure(text=f"Guardado: {encabezado[:30]}...")
                 self.cargar_lista_clases()
                 
@@ -1245,35 +1242,21 @@ Deseas abrir la consola de Google Cloud ahora?"""
                 messagebox.showerror("Error", f"No se pudo guardar la clase:\n{str(e)}")
 
     def cargar_lista_clases(self):
+        """Carga la lista de clases desde la base de datos"""
         if not self.current_curso:
             return
         
-        # Cargar desde archivo JSON
-        archivo_clases = os.path.join(DATA_DIR, f"clases_curso_{self.current_curso}.json")
-        clases = []
-        
-        if os.path.exists(archivo_clases):
-            try:
-                with open(archivo_clases, 'r', encoding='utf-8') as f:
-                    todas_clases = json.load(f)
-                    for clase_id, datos in todas_clases.items():
-                        clases.append((clase_id, datos.get("encabezado", "Sin titulo")))
-                        # Actualizar memoria también
-                        if not hasattr(self, 'clases_temp'):
-                            self.clases_temp = {}
-                        self.clases_temp[clase_id] = datos
-            except Exception as e:
-                print(f"Error cargando clases: {e}")
-        
-        # También revisar memoria
-        elif hasattr(self, 'clases_temp'):
-            clases = [(k, v["encabezado"]) for k, v in self.clases_temp.items() 
-                     if v.get("curso_id") == self.current_curso]
+        # Obtener clases de la base de datos
+        clases_db = self.db.get_clases(self.current_curso)
         
         valores = ["-- Nueva Clase --"]
         self.clases_dict = {"-- Nueva Clase --": None}
         
-        for clase_id, encabezado in clases:
+        for clase in clases_db:
+            # clase = (id, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion)
+            clase_id = clase[0]
+            encabezado = clase[1]
+            
             display = encabezado[:50] + "..." if len(encabezado) > 50 else encabezado
             valores.append(display)
             self.clases_dict[display] = clase_id
@@ -1283,7 +1266,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
             self.combo_clases_guardadas.set("-- Nueva Clase --")
 
     def cargar_clase_guardada(self, seleccion):
-        """Carga una clase guardada en los campos"""
+        """Carga una clase guardada desde la base de datos"""
         if seleccion == "-- Nueva Clase --":
             self.limpiar_campos_clase()
             self.clase_actual_id = None
@@ -1293,53 +1276,43 @@ Deseas abrir la consola de Google Cloud ahora?"""
         if not clase_id:
             return
         
-        # Buscar en archivo primero, luego en memoria
-        clase_data = None
-        archivo_clases = os.path.join(DATA_DIR, f"clases_curso_{self.current_curso}.json")
+        # Obtener datos de la base de datos
+        clase_data = self.db.get_clase_por_id(clase_id)
         
-        if os.path.exists(archivo_clases):
-            try:
-                with open(archivo_clases, 'r', encoding='utf-8') as f:
-                    todas_clases = json.load(f)
-                    clase_data = todas_clases.get(clase_id)
-            except:
-                pass
+        if not clase_data:
+            messagebox.showerror("Error", "No se pudo cargar la clase")
+            return
         
-        # Si no está en archivo, buscar en memoria
-        if not clase_data and hasattr(self, 'clases_temp') and clase_id in self.clases_temp:
-            clase_data = self.clases_temp[clase_id]
+        self.clase_actual_id = clase_id
         
-        if clase_data:
-            self.clase_actual_id = clase_id
+        # Cargar campos de forma segura
+        try:
+            self.entry_encabezado_clase.delete(0, "end")
+            self.entry_encabezado_clase.insert(0, clase_data.get("encabezado", ""))
             
-            # Limpiar y cargar campos de forma segura
-            try:
-                self.entry_encabezado_clase.delete(0, "end")
-                self.entry_encabezado_clase.insert(0, clase_data.get("encabezado", ""))
-                
-                self.entry_topicos.delete(0, "end")
-                self.entry_topicos.insert(0, clase_data.get("topicos", ""))
-                
-                self.entry_observaciones.delete(0, "end")
-                self.entry_observaciones.insert(0, clase_data.get("observaciones", ""))
-                
-                self.texto_clase.delete("1.0", "end")
-                self.texto_clase.insert("1.0", clase_data.get("contenido", ""))
-                
-                # Limpiar y recrear links
-                for widget in self.frame_links.winfo_children():
-                    widget.destroy()
-                self.links_entries = []
-                
-                for link in clase_data.get("links", []):
-                    self.agregar_campo_link()
-                    if self.links_entries:
-                        self.links_entries[-1][0].insert(0, link.get("nombre", ""))
-                        self.links_entries[-1][1].insert(0, link.get("url", ""))
-                
-                self.status_clases_label.configure(text=f"Cargada: {clase_data.get('encabezado', '')[:30]}...")
-            except Exception as e:
-                messagebox.showerror("Error", f"Error al cargar la clase: {str(e)}")
+            self.entry_topicos.delete(0, "end")
+            self.entry_topicos.insert(0, clase_data.get("topicos", ""))
+            
+            self.entry_observaciones.delete(0, "end")
+            self.entry_observaciones.insert(0, clase_data.get("observaciones", ""))
+            
+            self.texto_clase.delete("1.0", "end")
+            self.texto_clase.insert("1.0", clase_data.get("contenido", ""))
+            
+            # Limpiar y recrear links
+            for widget in self.frame_links.winfo_children():
+                widget.destroy()
+            self.links_entries = []
+            
+            for link in clase_data.get("links", []):
+                self.agregar_campo_link()
+                if self.links_entries:
+                    self.links_entries[-1][0].insert(0, link.get("nombre", ""))
+                    self.links_entries[-1][1].insert(0, link.get("url", ""))
+            
+            self.status_clases_label.configure(text=f"Cargada: {clase_data.get('encabezado', '')[:30]}...")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar la clase: {str(e)}")
 
     def limpiar_campos_clase(self):
         self.entry_encabezado_clase.delete(0, "end")
@@ -1357,15 +1330,18 @@ Deseas abrir la consola de Google Cloud ahora?"""
         if seleccion == "-- Nueva Clase --":
             messagebox.showwarning("Advertencia", "Selecciona una clase para eliminar")
             return
+        
         if messagebox.askyesno("Confirmar", f"Eliminar '{seleccion}'?"):
             clase_id = self.clases_dict.get(seleccion)
-            if clase_id and hasattr(self.db, 'eliminar_clase'):
-                self.db.eliminar_clase(clase_id)
-            elif hasattr(self, 'clases_temp') and clase_id in self.clases_temp:
-                del self.clases_temp[clase_id]
-            self.cargar_lista_clases()
-            self.limpiar_campos_clase()
-            messagebox.showinfo("Exito", "Clase eliminada")
+            if clase_id:
+                success, error = self.db.eliminar_clase(clase_id)
+                if success:
+                    self.cargar_lista_clases()
+                    self.limpiar_campos_clase()
+                    self.clase_actual_id = None
+                    messagebox.showinfo("Éxito", "Clase eliminada")
+                else:
+                    messagebox.showerror("Error", f"No se pudo eliminar: {error}")
 
 
     def  abrir_asistencia(self):
@@ -2000,18 +1976,10 @@ Deseas abrir la consola de Google Cloud ahora?"""
             messagebox.showerror("Error", "Necesitas instalar reportlab:\npip install reportlab")
             return
         
-        # Obtener todas las clases
-        clases = []
-        if hasattr(self.db, 'get_clases'):
-            try:
-                clases = self.db.get_clases(self.current_curso)
-            except:
-                clases = []
-        elif hasattr(self, 'clases_temp'):
-            clases = [(k, v["encabezado"]) for k, v in self.clases_temp.items() 
-                     if v.get("curso_id") == self.current_curso]
+        # Obtener todas las clases de la base de datos
+        clases_db = self.db.get_clases(self.current_curso)
         
-        if not clases:
+        if not clases_db:
             messagebox.showwarning("Advertencia", "No hay clases guardadas para exportar")
             return
         
@@ -2053,21 +2021,16 @@ Deseas abrir la consola de Google Cloud ahora?"""
             elementos.append(Paragraph("REGISTRO DE CLASES", estilo_titulo))
             elementos.append(Spacer(1, 0.5*inch))
             elementos.append(Paragraph(f"<b>Curso:</b> {curso_nombre}", estilo_subtitulo))
-            elementos.append(Paragraph(f"<b>Total de clases:</b> {len(clases)}", estilo_normal))
+            elementos.append(Paragraph(f"<b>Total de clases:</b> {len(clases_db)}", estilo_normal))
             elementos.append(Paragraph(f"<b>Fecha de exportacion:</b> {datetime.now().strftime('%d/%m/%Y')}", estilo_normal))
             elementos.append(PageBreak())
             
             # Cada clase
-            for idx, (clase_id, encabezado) in enumerate(clases, 1):
-                # Obtener datos de la clase
-                clase_data = None
-                if hasattr(self.db, 'get_clase_por_id'):
-                    try:
-                        clase_data = self.db.get_clase_por_id(clase_id)
-                    except:
-                        clase_data = None
-                elif hasattr(self, 'clases_temp') and clase_id in self.clases_temp:
-                    clase_data = self.clases_temp[clase_id]
+            for idx, clase_row in enumerate(clases_db, 1):
+                clase_id = clase_row[0]
+                
+                # Obtener datos completos de la clase
+                clase_data = self.db.get_clase_por_id(clase_id)
                 
                 if not clase_data:
                     continue
@@ -2080,6 +2043,13 @@ Deseas abrir la consola de Google Cloud ahora?"""
                 topicos = clase_data.get('topicos', '')
                 if topicos:
                     elementos.append(Paragraph("<b>Topicos:</b> " + topicos, estilo_normal))
+                
+                # Enlaces
+                links = clase_data.get('links', [])
+                if links:
+                    elementos.append(Paragraph("<b>Lecturas asignadas:</b>", estilo_normal))
+                    for link in links:
+                        elementos.append(Paragraph(f"• {link['nombre']}: {link['url']}", estilo_normal))
                 
                 # Contenido (resumido si es muy largo)
                 contenido = clase_data.get('contenido', '')
@@ -2101,7 +2071,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
                 elementos.pop()
             
             doc.build(elementos)
-            messagebox.showinfo("Exito", f"PDF con {len(clases)} clases guardado:\n{filepath}")
+            messagebox.showinfo("Exito", f"PDF con {len(clases_db)} clases guardado:\n{filepath}")
             
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo crear el PDF:\n{str(e)}")

@@ -79,7 +79,30 @@ class DatabaseManager:
                 auto_sync BOOLEAN DEFAULT 0
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS clases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                curso_id INTEGER NOT NULL,
+                encabezado TEXT NOT NULL,
+                topicos TEXT,
+                contenido TEXT,
+                observaciones TEXT,
+                fecha_clase DATE,
+                fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (curso_id) REFERENCES cursos(id)
+            )
+        ''')
         
+        # Tabla de enlaces de clases
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS clase_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                clase_id INTEGER NOT NULL,
+                nombre TEXT,
+                url TEXT,
+                FOREIGN KEY (clase_id) REFERENCES clases(id) ON DELETE CASCADE
+            )
+        ''')
         conn.commit()
         conn.close()
     
@@ -395,6 +418,139 @@ class DatabaseManager:
                 puntos_obtenidos += notas_registradas[eval_id]
         
         return round(puntos_obtenidos, 2), int(puntos_maximos_posibles)
+    
+        # ========== GESTIÓN DE CLASES ==========
+    
+    def crear_clase(self, curso_id, encabezado, topicos="", contenido="", observaciones="", fecha_clase=None):
+        """Crea una nueva clase en la base de datos"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO clases (curso_id, encabezado, topicos, contenido, observaciones, fecha_clase)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (curso_id, encabezado, topicos, contenido, observaciones, fecha_clase))
+            conn.commit()
+            return cursor.lastrowid, None
+        except Exception as e:
+            return None, str(e)
+        finally:
+            conn.close()
+    
+    def actualizar_clase(self, clase_id, encabezado=None, topicos=None, contenido=None, observaciones=None, fecha_clase=None):
+        """Actualiza una clase existente"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            if encabezado is not None:
+                cursor.execute('UPDATE clases SET encabezado = ? WHERE id = ?', (encabezado, clase_id))
+            if topicos is not None:
+                cursor.execute('UPDATE clases SET topicos = ? WHERE id = ?', (topicos, clase_id))
+            if contenido is not None:
+                cursor.execute('UPDATE clases SET contenido = ? WHERE id = ?', (contenido, clase_id))
+            if observaciones is not None:
+                cursor.execute('UPDATE clases SET observaciones = ? WHERE id = ?', (observaciones, clase_id))
+            if fecha_clase is not None:
+                cursor.execute('UPDATE clases SET fecha_clase = ? WHERE id = ?', (fecha_clase, clase_id))
+            # Actualizar fecha de modificación
+            cursor.execute('UPDATE clases SET fecha_modificacion = CURRENT_TIMESTAMP WHERE id = ?', (clase_id,))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+    
+    def eliminar_clase(self, clase_id):
+        """Elimina una clase y sus enlaces"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            # Los enlaces se eliminan automáticamente por ON DELETE CASCADE
+            cursor.execute('DELETE FROM clases WHERE id = ?', (clase_id,))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+    
+    def get_clases(self, curso_id):
+        """Obtiene todas las clases de un curso"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion
+            FROM clases 
+            WHERE curso_id = ? 
+            ORDER BY fecha_modificacion DESC
+        ''', (curso_id,))
+        clases = cursor.fetchall()
+        conn.close()
+        return clases
+    
+    def get_clase_por_id(self, clase_id):
+        """Obtiene una clase específica con sus enlaces"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Obtener datos de la clase
+        cursor.execute('''
+            SELECT id, curso_id, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion
+            FROM clases WHERE id = ?
+        ''', (clase_id,))
+        clase = cursor.fetchone()
+        
+        if not clase:
+            conn.close()
+            return None
+        
+        # Obtener enlaces
+        cursor.execute('SELECT nombre, url FROM clase_links WHERE clase_id = ?', (clase_id,))
+        links = [{"nombre": row[0], "url": row[1]} for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        return {
+            "id": clase[0],
+            "curso_id": clase[1],
+            "encabezado": clase[2],
+            "topicos": clase[3],
+            "contenido": clase[4],
+            "observaciones": clase[5],
+            "fecha_clase": clase[6],
+            "fecha_modificacion": clase[7],
+            "links": links
+        }
+    
+    def agregar_link_clase(self, clase_id, nombre, url):
+        """Agrega un enlace a una clase"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO clase_links (clase_id, nombre, url)
+                VALUES (?, ?, ?)
+            ''', (clase_id, nombre, url))
+            conn.commit()
+            return cursor.lastrowid, None
+        except Exception as e:
+            return None, str(e)
+        finally:
+            conn.close()
+    
+    def eliminar_links_clase(self, clase_id):
+        """Elimina todos los enlaces de una clase (útil al actualizar)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM clase_links WHERE clase_id = ?', (clase_id,))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
     
     # ========== EXPORTACIÓN ==========
     
