@@ -249,17 +249,17 @@ class DatabaseManager:
         evals = cursor.fetchall()
         conn.close()
         return evals
-    
-def verificar_porcentaje_total(self, curso_id):
-    """Verifica que el total de puntos sea 100"""
-    conn = self.get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT COALESCE(SUM(porcentaje), 0) FROM evaluaciones WHERE curso_id = ?
-    ''', (curso_id,))
-    total = cursor.fetchone()[0]
-    conn.close()
-    return total 
+
+    def verificar_porcentaje_total(self, curso_id):
+        """Verifica que el total de puntos sea 100"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COALESCE(SUM(porcentaje), 0) FROM evaluaciones WHERE curso_id = ?
+        ''', (curso_id,))
+        total = cursor.fetchone()[0]
+        conn.close()
+        return total
     
     # ========== GESTIÓN DE ESTUDIANTES ==========
     
@@ -358,43 +358,43 @@ def verificar_porcentaje_total(self, curso_id):
         ''', (estudiante_id, evaluacion_id, nota, observaciones))
         conn.commit()
         conn.close()
-    
-def calcular_promedio(self, estudiante_id, curso_id):
-    """Calcula el promedio sumando directamente los puntos obtenidos"""
-    conn = self.get_connection()
-    cursor = conn.cursor()
-    
-    # Obtener todas las evaluaciones del curso con sus puntos máximos
-    cursor.execute('''
-        SELECT id, porcentaje 
-        FROM evaluaciones 
-        WHERE curso_id = ?
-    ''', (curso_id,))
-    evaluaciones = {row[0]: row[1] for row in cursor.fetchall()}
-    
-    if not evaluaciones:
+
+    def calcular_promedio(self, estudiante_id, curso_id):
+        """Calcula el promedio sumando directamente los puntos obtenidos"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Obtener todas las evaluaciones del curso con sus puntos máximos
+        cursor.execute('''
+            SELECT id, porcentaje 
+            FROM evaluaciones 
+            WHERE curso_id = ?
+        ''', (curso_id,))
+        evaluaciones = {row[0]: row[1] for row in cursor.fetchall()}
+        
+        if not evaluaciones:
+            conn.close()
+            return 0.0, 0
+        
+        # Obtener las notas del estudiante
+        cursor.execute('''
+            SELECT evaluacion_id, nota 
+            FROM notas 
+            WHERE estudiante_id = ? AND nota IS NOT NULL
+        ''', (estudiante_id,))
+        notas_registradas = {row[0]: row[1] for row in cursor.fetchall()}
+        
         conn.close()
-        return 0.0, 0
-    
-    # Obtener las notas del estudiante
-    cursor.execute('''
-        SELECT evaluacion_id, nota 
-        FROM notas 
-        WHERE estudiante_id = ? AND nota IS NOT NULL
-    ''', (estudiante_id,))
-    notas_registradas = {row[0]: row[1] for row in cursor.fetchall()}
-    
-    conn.close()
-    
-    # Sumar puntos obtenidos directamente
-    puntos_obtenidos = 0
-    puntos_maximos_posibles = sum(evaluaciones.values())  # Debería ser 100
-    
-    for eval_id, puntos_max in evaluaciones.items():
-        if eval_id in notas_registradas:
-            puntos_obtenidos += notas_registradas[eval_id]
-    
-    return round(puntos_obtenidos, 2), int(puntos_maximos_posibles)
+        
+        # Sumar puntos obtenidos directamente
+        puntos_obtenidos = 0
+        puntos_maximos_posibles = sum(evaluaciones.values())  # Debería ser 100
+        
+        for eval_id, puntos_max in evaluaciones.items():
+            if eval_id in notas_registradas:
+                puntos_obtenidos += notas_registradas[eval_id]
+        
+        return round(puntos_obtenidos, 2), int(puntos_maximos_posibles)
     
     # ========== EXPORTACIÓN ==========
     
