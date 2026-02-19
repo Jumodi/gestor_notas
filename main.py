@@ -179,6 +179,9 @@ class GestorNotasApp(CTk):
             self.actualizar_info_curso()
             self.actualizar_config_curso()
             self.actualizar_resumen()
+            self.cargar_lista_clases()  
+            self.limpiar_campos_clase()  
+            self.clase_actual_id = None 
 
     def load_cursos(self):
         # Limpiar scroll
@@ -989,12 +992,12 @@ Deseas abrir la consola de Google Cloud ahora?"""
         self.tab_clases.grid_columnconfigure(1, weight=1)
         self.tab_clases.grid_rowconfigure(0, weight=1)
         
-        #  FRAME SCROLLABLE PRINCIPAL para todo el contenido
+        # FRAME SCROLLABLE PRINCIPAL para todo el contenido
         scroll_principal = CTkScrollableFrame(self.tab_clases)
         scroll_principal.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         scroll_principal.grid_columnconfigure(0, weight=1)
         
-        # ========== CONTENIDO DE LA CLASE  ==========
+        # ========== CONTENIDO DE LA CLASE ==========
         self.clases_content_frame = CTkFrame(scroll_principal)
         self.clases_content_frame.pack(fill="x", padx=5, pady=5)
         self.clases_content_frame.grid_columnconfigure(0, weight=1)
@@ -1058,7 +1061,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
                                            height=50)
         self.entry_observaciones.pack(fill="x", padx=10, pady=5)
         
-        # --- Botones de guardar y exportar  ---
+        # --- Botones de guardar y exportar ---
         btn_frame = CTkFrame(self.clases_content_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=10, pady=15)
         
@@ -1069,7 +1072,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
         CTkButton(btn_frame, text="Exportar TODAS las clases", command=self.exportar_todas_clases_pdf,
                  fg_color="purple", height=40).pack(side="left", padx=5, fill="x", expand=True)
         
-        # ========== PANEL DERECHO: Herramientas  ==========
+        # ========== PANEL DERECHO: Herramientas ==========
         self.clases_tools_frame = CTkFrame(self.tab_clases)
         self.clases_tools_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
         
@@ -1116,10 +1119,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
                                              text="Estado: Listo", 
                                              font=ctk.CTkFont(size=12))
         self.status_clases_label.pack(pady=20)
-        
-        # Cargar clases existentes al iniciar
-        self.cargar_lista_clases()
-        
+                
         # Bindings para guardado automático
         self.entry_encabezado_clase.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
         self.entry_topicos.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
@@ -1243,7 +1243,13 @@ Deseas abrir la consola de Google Cloud ahora?"""
 
     def cargar_lista_clases(self):
         """Carga la lista de clases desde la base de datos"""
+        # Si no hay curso seleccionado, limpiar el combo
         if not self.current_curso:
+            valores = ["-- Nueva Clase --"]
+            self.clases_dict = {"-- Nueva Clase --": None}
+            if hasattr(self, 'combo_clases_guardadas') and self.combo_clases_guardadas.winfo_exists():
+                self.combo_clases_guardadas.configure(values=valores)
+                self.combo_clases_guardadas.set("-- Nueva Clase --")
             return
         
         # Obtener clases de la base de datos
@@ -1315,15 +1321,20 @@ Deseas abrir la consola de Google Cloud ahora?"""
             messagebox.showerror("Error", f"Error al cargar la clase: {str(e)}")
 
     def limpiar_campos_clase(self):
+        """Limpia todos los campos de la clase para crear una nueva"""
         self.entry_encabezado_clase.delete(0, "end")
         self.entry_topicos.delete(0, "end")
         self.entry_observaciones.delete(0, "end")
         self.texto_clase.delete("1.0", "end")
+        
+        # Limpiar links
         for widget in self.frame_links.winfo_children():
             widget.destroy()
         self.links_entries = []
-        self.agregar_campo_link()
+        self.agregar_campo_link()  # Agregar al menos un campo vacío
+        
         self.status_clases_label.configure(text="Nueva clase")
+        self.clase_actual_id = None
 
     def eliminar_clase_guardada(self):
         seleccion = self.combo_clases_guardadas.get()
