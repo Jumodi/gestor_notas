@@ -1010,7 +1010,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
                 font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
         
         self.entry_topicos = CTkEntry(self.clases_content_frame, 
-                                     placeholder_text="Ej: 1. Presentacion del silabo, 2. Conceptos basicos, 3. Dinamica grupal...",
+                                     placeholder_text="Ej: 1. Presentacion del curso, 2. Conceptos basicos, 3. Dinamica grupal...",
                                      height=35)
         self.entry_topicos.pack(fill="x", padx=10, pady=5)
         
