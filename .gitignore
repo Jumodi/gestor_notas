@@ -5,3 +5,6 @@ data/
 *.bat
 *.iss
 installer/
+*.backup_*
+data/*.db
+Respaldo/*.db

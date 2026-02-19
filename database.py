@@ -448,6 +448,8 @@ class DatabaseManager:
             
             ws.append(row)
         
+        #Prueba de código
+
         # Ajustar anchos de columna
         for column in ws.columns:
             max_length = 0

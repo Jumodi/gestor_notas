@@ -31,6 +31,8 @@ def get_resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
+#PRUEBA DE CÓDIGO
+
 def get_data_path():
     if getattr(sys, 'frozen', False):
         base_path = os.path.dirname(sys.executable)
