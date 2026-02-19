@@ -7,4 +7,6 @@ data/
 installer/
 *.backup_*
 data/*.db
-Respaldo/*.db
+Respaldo/*.dbRespaldo/
+__pycache__/
+data/
