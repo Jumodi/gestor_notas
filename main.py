@@ -416,6 +416,208 @@ class GestorNotasApp(CTk):
             else:
                 messagebox.showerror("Error", error or "No se pudo eliminar")
 
+    def editar_rubrica(self):
+        """Abre el editor de rubrica para la evaluacion seleccionada"""
+        if not self.current_evaluacion:
+            messagebox.showwarning("Advertencia", "Selecciona una evaluacion primero")
+            return
+        
+        # Obtener info de la evaluacion
+        evals = self.db.get_evaluaciones(self.current_curso)
+        eval_info = next((e for e in evals if e[0] == self.current_evaluacion), None)
+        if not eval_info:
+            return
+        
+        eval_nombre = eval_info[1]
+        puntos_max_eval = eval_info[2]
+        
+        # Crear ventana de edicion de rubrica
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(f"Editar Rubrica - {eval_nombre}")
+        dialog.geometry("700x600")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Centrar
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (700 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (600 // 2)
+        dialog.geometry(f"700x600+{x}+{y}")
+        
+        # Header
+        CTkLabel(dialog, text=f"Rubrica: {eval_nombre}", 
+                font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 5))
+        
+        CTkLabel(dialog, text=f"Puntos maximos de la evaluacion: {puntos_max_eval}", 
+                font=ctk.CTkFont(size=14), text_color="gray").pack()
+        
+        # Frame para mostrar total asignado
+        frame_total = CTkFrame(dialog)
+        frame_total.pack(fill="x", padx=20, pady=10)
+        
+        self.lbl_total_rubrica = CTkLabel(frame_total, 
+                                           text="Total asignado en rubrica: 0", 
+                                           font=ctk.CTkFont(size=14, weight="bold"))
+        self.lbl_total_rubrica.pack(side="left", padx=10)
+        
+        self.lbl_diferencia = CTkLabel(frame_total, 
+                                        text="(Faltan: 20)", 
+                                        font=ctk.CTkFont(size=12))
+        self.lbl_diferencia.pack(side="left", padx=10)
+        
+        # Frame scrollable para criterios existentes
+        scroll_criterios = CTkScrollableFrame(dialog, label_text="Criterios de la Rubrica", height=300)
+        scroll_criterios.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        self.frame_criterios_list = scroll_criterios
+        self.criterios_entries = []  # Lista para guardar referencias
+        
+        def actualizar_total():
+            """Actualiza el total de puntos asignados"""
+            total = 0
+            for entry_info in self.criterios_entries:
+                try:
+                    puntos = float(entry_info['puntos'].get() or 0)
+                    total += puntos
+                except:
+                    pass
+            
+            self.lbl_total_rubrica.configure(text=f"Total asignado en rubrica: {total}")
+            
+            diferencia = puntos_max_eval - total
+            if diferencia == 0:
+                color = "green"
+                texto = "(Completo)"
+            elif diferencia > 0:
+                color = "orange"
+                texto = f"(Faltan: {diferencia})"
+            else:
+                color = "red"
+                texto = f"(Excede por: {abs(diferencia)})"
+            
+            self.lbl_diferencia.configure(text=texto, text_color=color)
+        
+        def agregar_fila_criterio(nombre="", puntos="", criterio_id=None):
+            """Agrega una fila para un criterio"""
+            frame = CTkFrame(self.frame_criterios_list)
+            frame.pack(fill="x", pady=2, padx=5)
+            
+            entry_nombre = CTkEntry(frame, placeholder_text="Nombre del criterio", width=350)
+            entry_nombre.pack(side="left", padx=2, fill="x", expand=True)
+            if nombre:
+                entry_nombre.insert(0, nombre)
+            
+            entry_puntos = CTkEntry(frame, placeholder_text="Pts", width=80)
+            entry_puntos.pack(side="left", padx=2)
+            if puntos:
+                entry_puntos.insert(0, str(puntos))
+            
+            # Guardar referencia
+            criterio_info = {
+                'frame': frame,
+                'nombre': entry_nombre,
+                'puntos': entry_puntos,
+                'id': criterio_id
+            }
+            self.criterios_entries.append(criterio_info)
+            
+            # Bind para actualizar total
+            entry_puntos.bind("<KeyRelease>", lambda e: actualizar_total())
+            
+            def eliminar_fila():
+                frame.destroy()
+                self.criterios_entries.remove(criterio_info)
+                actualizar_total()
+                # Si tenia ID, marcar para eliminar
+                if criterio_id:
+                    criterio_info['eliminar'] = True
+            
+            CTkButton(frame, text="X", width=30, fg_color="red", 
+                     command=eliminar_fila).pack(side="left", padx=2)
+        
+        # Cargar criterios existentes
+        criterios_existentes = self.db.get_criterios_rubrica(self.current_evaluacion)
+        if criterios_existentes:
+            for crit in criterios_existentes:
+                crit_id, nombre, puntos, orden = crit
+                agregar_fila_criterio(nombre, puntos, crit_id)
+        else:
+            # Agregar filas vacias por defecto
+            agregar_fila_criterio()
+            agregar_fila_criterio()
+        
+        actualizar_total()
+        
+        # Boton agregar mas criterios
+        CTkButton(dialog, text="+ Agregar Criterio", 
+                 command=lambda: agregar_fila_criterio()).pack(pady=5)
+        
+        # Botones de accion
+        btn_frame = CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=20)
+        
+        def guardar_rubrica():
+            """Guarda todos los criterios de la rubrica"""
+            # Validar que sume el total
+            total = 0
+            criterios_validos = []
+            
+            for entry_info in self.criterios_entries:
+                nombre = entry_info['nombre'].get().strip()
+                try:
+                    puntos = float(entry_info['puntos'].get() or 0)
+                except:
+                    puntos = 0
+                
+                if nombre:  # Solo si tiene nombre
+                    total += puntos
+                    criterios_validos.append({
+                        'nombre': nombre,
+                        'puntos': puntos,
+                        'id': entry_info.get('id'),
+                        'eliminar': entry_info.get('eliminar', False)
+                    })
+            
+            if total != puntos_max_eval:
+                messagebox.showerror("Error", 
+                    f"Los puntos de la rubrica deben sumar exactamente {puntos_max_eval}.\n"
+                    f"Actualmente suman: {total}")
+                return
+            
+            # Guardar en base de datos
+            try:
+                # Eliminar los marcados para eliminar
+                for c in criterios_validos:
+                    if c['eliminar'] and c['id']:
+                        self.db.eliminar_criterio_rubrica(c['id'])
+                
+                # Agregar o actualizar los demas
+                for idx, c in enumerate(criterios_validos):
+                    if not c['eliminar']:
+                        if c['id']:
+                            # Actualizar existente
+                            self.db.actualizar_criterio_rubrica(c['id'], c['nombre'], c['puntos'], idx)
+                        else:
+                            self.db.agregar_criterio_rubrica(
+                                self.current_evaluacion, 
+                                c['nombre'], 
+                                c['puntos'],
+                                idx
+                            )
+                
+                messagebox.showinfo("Exito", "Rubrica guardada correctamente")
+                dialog.destroy()
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo guardar: {str(e)}")
+        
+        CTkButton(btn_frame, text="Guardar Rubrica", 
+                 command=guardar_rubrica, fg_color="green",
+                 height=40, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5, fill="x", expand=True)
+        
+        CTkButton(btn_frame, text="Cancelar", 
+                 command=dialog.destroy, fg_color="gray").pack(side="left", padx=5, fill="x", expand=True)
+
     def agregar_estudiante(self):
         if not self.current_curso:
             messagebox.showwarning("Advertencia", "Selecciona un curso primero")
@@ -817,7 +1019,7 @@ class GestorNotasApp(CTk):
             nombre_container.grid(row=0, column=0, padx=10, pady=2, sticky="w")
             
             lbl_nombre = CTkLabel(nombre_container, 
-                                 text=f"👤 {nombre}", 
+                                 text=f" {nombre}", 
                                  font=ctk.CTkFont(size=12),
                                  cursor="hand2")
             lbl_nombre.pack(anchor="w")
@@ -838,6 +1040,9 @@ class GestorNotasApp(CTk):
             # --- CAMPO DE NOTA ---
             nota_existente, obs_existente = self.db.get_nota(est_id, self.current_evaluacion)
             
+            # Verificar si la evaluacion tiene rubrica
+            tiene_rubrica = len(self.db.get_criterios_rubrica(self.current_evaluacion)) > 0
+            
             nota_container = CTkFrame(row, fg_color="transparent")
             nota_container.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
             
@@ -846,11 +1051,22 @@ class GestorNotasApp(CTk):
                      justify="center", placeholder_text=f"0-{puntos_max}")
             entry_nota.pack(side="left", padx=2)
             
-            estado_text = "✓" if nota_existente else "-"
+            # Indicador visual diferente si tiene rubrica
+            if tiene_rubrica and nota_existente:
+                estado_text = "[R]"  # Indicador de rubrica
+                tooltip_text = "Calificado por rubrica - Clic para editar"
+            elif nota_existente:
+                estado_text = "OK"
+                tooltip_text = "Calificado"
+            else:
+                estado_text = "-"
+                tooltip_text = "Sin calificar - Clic para calificar"
+            
             estado_color = "green" if nota_existente else "gray"
-            estado_label = CTkLabel(nota_container, text=estado_text, width=20, 
-                                   text_color=estado_color, font=ctk.CTkFont(size=12, weight="bold"))
+            estado_label = CTkLabel(nota_container, text=estado_text, width=25, 
+                                   text_color=estado_color, font=ctk.CTkFont(size=11, weight="bold"))
             estado_label.pack(side="left", padx=2)
+            self.agregar_tooltip(estado_label, tooltip_text)
             
             # --- OBSERVACIONES ---
             obs_var = ctk.StringVar(value=obs_existente or "")
@@ -868,43 +1084,277 @@ class GestorNotasApp(CTk):
             
             self.entries_notas[est_id] = (nota_var, obs_var, estado_label)
 
+    
     def mostrar_modal_estudiante(self, estudiante):
-        """Muestra modal con datos del estudiante al hacer clic"""
+        """Muestra modal con datos del estudiante y rubrica de evaluacion"""
         est_id, nombre, grupo, email, carne = estudiante
         
-        modal = CTkToplevel(self)
-        modal.title(f"Datos del Estudiante")
-        modal.geometry("400x300")
+        if not self.current_evaluacion:
+            self.mostrar_modal_estudiante_simple(estudiante)
+            return
+        
+        evals = self.db.get_evaluaciones(self.current_curso)
+        eval_info = next((e for e in evals if e[0] == self.current_evaluacion), None)
+        
+        if not eval_info:
+            self.mostrar_modal_estudiante_simple(estudiante)
+            return
+        
+        eval_nombre = eval_info[1]
+        puntos_max_eval = eval_info[2]
+        
+        criterios = self.db.get_criterios_rubrica(self.current_evaluacion)
+        
+        if not criterios:
+            self.mostrar_modal_estudiante_simple(estudiante, 
+                mensaje_extra="\n\nEsta evaluacion no tiene rubrica definida.\nVe a 'Rubrica' para crearla.")
+            return
+        
+        # Calcular altura necesaria basada en número de criterios
+        altura_por_criterio = 85
+        altura_minima = 500
+        altura_maxima = 900
+        altura_calculada = min(max(altura_minima, 350 + (len(criterios) * altura_por_criterio)), altura_maxima)
+        
+        # Crear modal con tamaño dinámico
+        modal = ctk.CTkToplevel(self)
+        modal.title(f"Calificar: {nombre}")
+        modal.geometry(f"650x{altura_calculada}")
         modal.transient(self)
         modal.grab_set()
         
         # Centrar en pantalla
         modal.update_idletasks()
-        x = (modal.winfo_screenwidth() // 2) - (400 // 2)
-        y = (modal.winfo_screenheight() // 2) - (300 // 2)
-        modal.geometry(f"400x300+{x}+{y}")
+        x = (modal.winfo_screenwidth() // 2) - (650 // 2)
+        y = (modal.winfo_screenheight() // 2) - (altura_calculada // 2)
+        modal.geometry(f"650x{altura_calculada}+{x}+{y}")
         
-        # Contenido
-        CTkLabel(modal, text="👤", font=ctk.CTkFont(size=48)).pack(pady=(20, 10))
+        # Frame principal que ocupa todo
+        main_frame = CTkFrame(modal)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Header compacto
+        header_frame = CTkFrame(main_frame, fg_color="blue", height=50)
+        header_frame.pack(fill="x", pady=(0, 5))
+        header_frame.pack_propagate(False)
+        
+        CTkLabel(header_frame, text=f"{nombre}", 
+                font=ctk.CTkFont(size=16, weight="bold"),
+                text_color="white").pack(pady=5)
+        
+        # Info básica en una línea (más compacto)
+        info_frame = CTkFrame(main_frame)
+        info_frame.pack(fill="x", pady=2)
+        
+        info_text = f"Grupo: {grupo}  |  "
+        info_text += f"Carne: {carne or 'N/A'}  |  "
+        info_text += f"Email: {email or 'N/A'}"
+        
+        CTkLabel(info_frame, text=info_text, 
+                font=ctk.CTkFont(size=11),
+                text_color="gray").pack(pady=2)
+        
+        # Título de rúbrica compacto
+        title_frame = CTkFrame(main_frame)
+        title_frame.pack(fill="x", pady=5)
+        
+        CTkLabel(title_frame, text=f"📋 {eval_nombre}", 
+                font=ctk.CTkFont(size=14, weight="bold")).pack(side="left", padx=5)
+        CTkLabel(title_frame, text=f"(Máx: {puntos_max_eval} pts)", 
+                font=ctk.CTkFont(size=11),
+                text_color="gray").pack(side="left", padx=5)
+        
+        # Frame scrollable para criterios - altura flexible
+        altura_scroll = altura_calculada - 280  # Restar espacio para header, info, botones
+        scroll_rubrica = CTkScrollableFrame(main_frame, 
+                                           label_text=f"Criterios ({len(criterios)})", 
+                                           height=altura_scroll)
+        scroll_rubrica.pack(fill="both", expand=True, pady=5)
+        
+        # Obtener calificaciones previas
+        calificaciones_previas = self.db.get_calificaciones_rubrica_estudiante(est_id, self.current_evaluacion)
+        
+        # Diccionario para guardar entries
+        entries_criterios = {}
+        
+        # Crear campos para cada criterio (más compactos)
+        for crit in calificaciones_previas:
+            crit_id, nombre_criterio, puntos_max, puntos_obtenidos, obs = crit
+            
+            # Frame más compacto para cada criterio
+            frame_crit = CTkFrame(scroll_rubrica)
+            frame_crit.pack(fill="x", pady=3, padx=3)
+            
+            # Nombre y máximo en una línea
+            header_crit = CTkFrame(frame_crit, fg_color="transparent")
+            header_crit.pack(fill="x", padx=5, pady=(3, 0))
+            
+            CTkLabel(header_crit, text=nombre_criterio, 
+                    font=ctk.CTkFont(size=12, weight="bold")).pack(side="left")
+            CTkLabel(header_crit, text=f" (max: {puntos_max})", 
+                    font=ctk.CTkFont(size=10),
+                    text_color="gray").pack(side="left", padx=5)
+            
+            # Frame para inputs en una línea
+            input_frame = CTkFrame(frame_crit, fg_color="transparent")
+            input_frame.pack(fill="x", padx=5, pady=3)
+            
+            # Entry para puntos (más compacto)
+            var_puntos = ctk.StringVar(value=str(puntos_obtenidos) if puntos_obtenidos > 0 else "")
+            entry_puntos = CTkEntry(input_frame, width=80, height=28,
+                                   textvariable=var_puntos,
+                                   placeholder_text=f"0-{puntos_max}")
+            entry_puntos.pack(side="left", padx=2)
+            
+            CTkLabel(input_frame, text="/", font=ctk.CTkFont(size=12)).pack(side="left", padx=2)
+            CTkLabel(input_frame, text=f"{puntos_max}", 
+                    font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=2)
+            
+            # Entry para observaciones (más ancho)
+            var_obs = ctk.StringVar(value=obs or "")
+            entry_obs = CTkEntry(input_frame, placeholder_text="Obs...", 
+                                textvariable=var_obs, width=300, height=28)
+            entry_obs.pack(side="left", padx=10, fill="x", expand=True)
+            
+            # Guardar referencia
+            entries_criterios[crit_id] = {
+                'puntos': var_puntos,
+                'obs': var_obs,
+                'max': puntos_max,
+                'nombre': nombre_criterio
+            }
+        
+        # Frame inferior fijo (no se mueve con el scroll)
+        bottom_frame = CTkFrame(main_frame)
+        bottom_frame.pack(fill="x", pady=5)
+        
+        # Label para mostrar total (más visible)
+        lbl_total = CTkLabel(bottom_frame, 
+                            text=f"Total: 0 / {puntos_max_eval}",
+                            font=ctk.CTkFont(size=18, weight="bold"))
+        lbl_total.pack(pady=5)
+        
+        def calcular_total():
+            total = 0
+            for entries in entries_criterios.values():
+                try:
+                    puntos = float(entries['puntos'].get() or 0)
+                    total += puntos
+                except:
+                    pass
+            
+            color = "green" if total == puntos_max_eval else "orange" if total < puntos_max_eval else "red"
+            lbl_total.configure(text=f"Total: {total} / {puntos_max_eval}", text_color=color)
+            return total
+        
+        # Calcular inicial
+        calcular_total()
+        
+        # Actualizar total cuando cambien los valores
+        for entries in entries_criterios.values():
+            entries['puntos'].trace_add("write", lambda *args: calcular_total())
+        
+        # ========== BOTONES ==========
+        btn_frame = CTkFrame(bottom_frame, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=5)
+        
+        def aceptar_y_guardar():
+            """Guarda todos los criterios y la nota total"""
+            try:
+                total = 0
+                
+                # Guardar cada criterio
+                for crit_id, entries in entries_criterios.items():
+                    puntos_str = entries['puntos'].get().strip()
+                    puntos = float(puntos_str) if puntos_str else 0
+                    obs = entries['obs'].get().strip()
+                    
+                    # Validar maximo del criterio
+                    if puntos > entries['max']:
+                        messagebox.showerror("Error", 
+                            f"'{entries['nombre']}': maximo {entries['max']} puntos")
+                        return
+                    
+                    # Guardar en rubrica
+                    self.db.guardar_calificacion_rubrica(est_id, crit_id, puntos, obs)
+                    total += puntos
+                
+                # Validar total no exceda
+                if total > puntos_max_eval:
+                    messagebox.showerror("Error", 
+                        f"Total ({total}) excede el maximo ({puntos_max_eval})")
+                    return
+                
+                # Guardar en tabla de notas
+                self.db.guardar_nota(est_id, self.current_evaluacion, total, "Calificado por rubrica")
+                
+                # Actualizar vista
+                self.load_estudiantes_notas()
+                self.actualizar_resumen()
+                
+                # Cerrar modal
+                modal.destroy()
+                
+                # Mostrar confirmacion
+                self.status_label.configure(
+                    text=f"Guardado: {nombre} = {total}/{puntos_max_eval} pts",
+                    text_color="green"
+                )
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo guardar: {str(e)}")
+        
+        # Botones grandes y visibles
+        CTkButton(btn_frame, text="✓ ACEPTAR", 
+                 command=aceptar_y_guardar,
+                 fg_color="green", 
+                 hover_color="darkgreen",
+                 height=45,
+                 font=ctk.CTkFont(size=15, weight="bold")).pack(side="left", padx=5, fill="x", expand=True)
+        
+        CTkButton(btn_frame, text="✗ Cancelar", 
+                 command=modal.destroy,
+                 fg_color="gray", 
+                 hover_color="darkgray",
+                 height=45,
+                 font=ctk.CTkFont(size=14)).pack(side="left", padx=5, fill="x", expand=True)
+        
+    def mostrar_modal_estudiante_simple(self, estudiante, mensaje_extra=""):
+        """Muestra solo los datos basicos del estudiante (sin rubrica)"""
+        est_id, nombre, grupo, email, carne = estudiante
+        
+        modal = CTkToplevel(self)
+        modal.title(f"Datos del Estudiante")
+        modal.geometry("400x350")
+        modal.transient(self)
+        modal.grab_set()
+        
+        # Centrar
+        modal.update_idletasks()
+        x = (modal.winfo_screenwidth() // 2) - (400 // 2)
+        y = (modal.winfo_screenheight() // 2) - (350 // 2)
+        modal.geometry(f"400x350+{x}+{y}")
+        
+        CTkLabel(modal, text="Estudiante", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(20, 10))
         CTkLabel(modal, text=nombre, font=ctk.CTkFont(size=18, weight="bold")).pack()
         
         frame_datos = CTkFrame(modal)
         frame_datos.pack(fill="x", padx=30, pady=20)
         
-        # Grupo
         CTkLabel(frame_datos, text="Grupo:", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w", padx=10, pady=5)
         CTkLabel(frame_datos, text=str(grupo)).grid(row=0, column=1, sticky="w", padx=10, pady=5)
         
-        # Carné
-        CTkLabel(frame_datos, text="Carné:", font=ctk.CTkFont(weight="bold")).grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        CTkLabel(frame_datos, text="Carne:", font=ctk.CTkFont(weight="bold")).grid(row=1, column=0, sticky="w", padx=10, pady=5)
         CTkLabel(frame_datos, text=carne or "No registrado").grid(row=1, column=1, sticky="w", padx=10, pady=5)
         
-        # Email
         CTkLabel(frame_datos, text="Email:", font=ctk.CTkFont(weight="bold")).grid(row=2, column=0, sticky="w", padx=10, pady=5)
-        email_text = email or "No registrado"
-        CTkLabel(frame_datos, text=email_text).grid(row=2, column=1, sticky="w", padx=10, pady=5)
+        CTkLabel(frame_datos, text=email or "No registrado").grid(row=2, column=1, sticky="w", padx=10, pady=5)
         
-        # Botón cerrar
+        if mensaje_extra:
+            CTkLabel(modal, text=mensaje_extra, 
+                    font=ctk.CTkFont(size=12),
+                    text_color="orange").pack(pady=10)
+        
         CTkButton(modal, text="Cerrar", command=modal.destroy, fg_color="blue").pack(pady=20)
 
     def guardar_nota_auto(self, estudiante_id, nota_var, obs_var, estado_label, puntos_maximos=None):
@@ -1201,57 +1651,88 @@ Deseas abrir la consola de Google Cloud ahora?"""
     def setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
+        
+        # ========== SIDEBAR ==========
         self.sidebar = CTkFrame(self, width=400, corner_radius=0)  
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_rowconfigure(0, weight=1)
+        
         self.sidebar_scroll = CTkScrollableFrame(self.sidebar, width=380, height=800) 
         self.sidebar_scroll.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        
         self.title_label = CTkLabel(self.sidebar_scroll, text="Gestor de Notas", font=ctk.CTkFont(size=20, weight="bold"))
         self.title_label.pack(pady=(0, 10))
+        
+        # --- Frame de Cursos ---
         self.cursos_frame = CTkFrame(self.sidebar_scroll)
         self.cursos_frame.pack(fill="x", pady=5)
+        
         CTkLabel(self.cursos_frame, text="Cursos", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        
         self.cursos_scroll = CTkScrollableFrame(self.cursos_frame, height=100)
         self.cursos_scroll.pack(fill="x", padx=5, pady=5)
+        
         btn_frame = CTkFrame(self.cursos_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=5, pady=5)
         CTkButton(btn_frame, text="Nuevo", width=80, command=self.crear_curso).pack(side="left", padx=2, fill="x", expand=True)
         CTkButton(btn_frame, text="Editar", width=80, command=self.editar_curso).pack(side="left", padx=2, fill="x", expand=True)
         CTkButton(btn_frame, text="X", width=50, command=self.eliminar_curso, fg_color="red", hover_color="darkred").pack(side="left", padx=2)
+        
+        # --- Frame de Evaluaciones ---
         self.evals_frame = CTkFrame(self.sidebar_scroll)
         self.evals_frame.pack(fill="x", pady=5)
+        
         CTkLabel(self.evals_frame, text="Evaluaciones", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        
         self.evals_scroll = CTkScrollableFrame(self.evals_frame, height=100)
         self.evals_scroll.pack(fill="x", padx=5, pady=5)
+        
         btn_frame = CTkFrame(self.evals_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=5, pady=5)
-        CTkButton(btn_frame, text="Nuevo", width=80, command=self.agregar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="Editar", width=80, command=self.editar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="X", width=50, command=self.eliminar_evaluacion, fg_color="orange", hover_color="darkorange").pack(side="left", padx=2)
+        CTkButton(btn_frame, text="Nuevo", width=60, command=self.agregar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="Editar", width=60, command=self.editar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="Rubrica", width=60, command=self.editar_rubrica, fg_color="purple", hover_color="darkpurple").pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="X", width=40, command=self.eliminar_evaluacion, fg_color="orange", hover_color="darkorange").pack(side="left", padx=2)
+        
+        # --- Frame de Estudiantes ---
         self.est_frame = CTkFrame(self.sidebar_scroll)
         self.est_frame.pack(fill="x", pady=5)
+        
         CTkLabel(self.est_frame, text="Estudiantes", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        
         CTkButton(self.est_frame, text="Agregar Estudiante", command=self.agregar_estudiante).pack(pady=2, fill="x", padx=5)
         CTkButton(self.est_frame, text="Agregar Varios", command=self.agregar_varios_estudiantes).pack(pady=2, fill="x", padx=5)
+        
         btn_frame = CTkFrame(self.est_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=5, pady=2)
         CTkButton(btn_frame, text="Editar", command=self.editar_estudiante).pack(side="left", fill="x", expand=True, padx=2)
         CTkButton(btn_frame, text="Eliminar", command=self.eliminar_estudiante, fg_color="red", hover_color="darkred").pack(side="left", fill="x", expand=True, padx=2)
+        
+        # --- Frame de Herramientas ---
         self.tools_frame = CTkFrame(self.sidebar_scroll)
         self.tools_frame.pack(fill="x", pady=5)
+        
         CTkLabel(self.tools_frame, text="Herramientas", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        
         CTkButton(self.tools_frame, text="Exportar a Excel", command=self.exportar_excel).pack(pady=2, fill="x", padx=5)
         CTkButton(self.tools_frame, text="Configurar Drive", command=self.configurar_drive).pack(pady=2, fill="x", padx=10)
         CTkButton(self.tools_frame, text="Sincronizar", command=self.sincronizar_manual, fg_color="green", hover_color="darkgreen").pack(pady=2, fill="x", padx=10)
         CTkButton(self.tools_frame, text="Compartir acceso", command=self.compartir_carpeta, fg_color="blue", hover_color="darkblue").pack(pady=2, fill="x", padx=10)
+        
+        # --- Label de Estado ---
         self.status_label = CTkLabel(self.sidebar_scroll, text="Estado: Listo", font=ctk.CTkFont(size=12))
         self.status_label.pack(pady=10)
+        
+        # ========== MAIN FRAME ==========
         self.main_frame = CTkFrame(self)
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         self.main_frame.grid_columnconfigure(0, weight=1)
         self.main_frame.grid_rowconfigure(0, weight=1)
+        
+        # --- Tabview ---
         self.tabview = CTkTabview(self.main_frame)
         self.tabview.grid(row=0, column=0, sticky="nsew")
+        
         self.tab_notas = self.tabview.add("Registro de Notas")
         self.tab_clases = self.tabview.add("Control de Clases")
         self.tab_config = self.tabview.add("Configuracion del Curso")

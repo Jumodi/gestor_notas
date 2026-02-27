@@ -18,6 +18,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        
         # Tabla de cursos
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS clases (
@@ -143,9 +144,153 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass
 
+        
+        # ========== TABLAS DE RÚBRICAS ==========
+
+        # Tabla de criterios de rúbrica para cada evaluación
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS rubrica_criterios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                evaluacion_id INTEGER NOT NULL,
+                nombre_criterio TEXT NOT NULL,
+                puntos_maximos REAL NOT NULL,
+                orden INTEGER DEFAULT 0,
+                FOREIGN KEY (evaluacion_id) REFERENCES evaluaciones(id) ON DELETE CASCADE,
+                UNIQUE(evaluacion_id, nombre_criterio)
+            )
+        ''')
+
+        # Tabla de calificaciones por criterio para cada estudiante
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS rubrica_calificaciones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                estudiante_id INTEGER NOT NULL,
+                criterio_id INTEGER NOT NULL,
+                puntos_obtenidos REAL,
+                observaciones TEXT,
+                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id) ON DELETE CASCADE,
+                FOREIGN KEY (criterio_id) REFERENCES rubrica_criterios(id) ON DELETE CASCADE,
+                UNIQUE(estudiante_id, criterio_id)
+            )
+        ''')
+
         conn.commit()
         conn.close()
     
+    # ========== GESTIÓN DE RÚBRICAS ==========
+
+    def agregar_criterio_rubrica(self, evaluacion_id, nombre_criterio, puntos_maximos, orden=0):
+        """Agrega un criterio a la rúbrica de una evaluación"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO rubrica_criterios (evaluacion_id, nombre_criterio, puntos_maximos, orden)
+                VALUES (?, ?, ?, ?)
+            ''', (evaluacion_id, nombre_criterio, puntos_maximos, orden))
+            conn.commit()
+            return cursor.lastrowid, None
+        except sqlite3.IntegrityError:
+            return None, "Ya existe un criterio con ese nombre en esta evaluación"
+        except Exception as e:
+            return None, str(e)
+        finally:
+            conn.close()
+
+    def eliminar_criterio_rubrica(self, criterio_id):
+        """Elimina un criterio de la rúbrica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM rubrica_criterios WHERE id = ?', (criterio_id,))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def get_criterios_rubrica(self, evaluacion_id):
+        """Obtiene todos los criterios de una rúbrica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, nombre_criterio, puntos_maximos, orden
+            FROM rubrica_criterios
+            WHERE evaluacion_id = ?
+            ORDER BY orden, id
+        ''', (evaluacion_id,))
+        criterios = cursor.fetchall()
+        conn.close()
+        return criterios
+
+    def get_total_puntos_rubrica(self, evaluacion_id):
+        """Obtiene la suma total de puntos de la rúbrica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COALESCE(SUM(puntos_maximos), 0)
+            FROM rubrica_criterios
+            WHERE evaluacion_id = ?
+        ''', (evaluacion_id,))
+        total = cursor.fetchone()[0]
+        conn.close()
+        return total
+
+    def guardar_calificacion_rubrica(self, estudiante_id, criterio_id, puntos_obtenidos, observaciones=""):
+        """Guarda la calificación de un estudiante en un criterio específico"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO rubrica_calificaciones (estudiante_id, criterio_id, puntos_obtenidos, observaciones)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(estudiante_id, criterio_id)
+                DO UPDATE SET puntos_obtenidos=excluded.puntos_obtenidos, 
+                            observaciones=excluded.observaciones,
+                            fecha_registro=CURRENT_TIMESTAMP
+            ''', (estudiante_id, criterio_id, puntos_obtenidos, observaciones))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def get_calificaciones_rubrica_estudiante(self, estudiante_id, evaluacion_id):
+        """Obtiene todas las calificaciones de rúbrica de un estudiante para una evaluación"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT rc.id, rc.nombre_criterio, rc.puntos_maximos, 
+                COALESCE(rcl.puntos_obtenidos, 0) as puntos_obtenidos,
+                rcl.observaciones
+            FROM rubrica_criterios rc
+            LEFT JOIN rubrica_calificaciones rcl ON rc.id = rcl.criterio_id 
+                                                AND rcl.estudiante_id = ?
+            WHERE rc.evaluacion_id = ?
+            ORDER BY rc.orden, rc.id
+        ''', (estudiante_id, evaluacion_id))
+        calificaciones = cursor.fetchall()
+        conn.close()
+        return calificaciones
+
+    def calcular_nota_total_rubrica(self, estudiante_id, evaluacion_id):
+        """Calcula la nota total sumando los puntos de la rúbrica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COALESCE(SUM(rcl.puntos_obtenidos), 0)
+            FROM rubrica_criterios rc
+            LEFT JOIN rubrica_calificaciones rcl ON rc.id = rcl.criterio_id 
+                                                AND rcl.estudiante_id = ?
+            WHERE rc.evaluacion_id = ?
+        ''', (estudiante_id, evaluacion_id))
+        total = cursor.fetchone()[0]
+        conn.close()
+        return total
+
     # ========== GESTIÓN DE CURSOS ==========
     
     def crear_curso(self, nombre, descripcion=""):
@@ -784,3 +929,137 @@ class DatabaseManager:
         wb.save(filepath)
         conn.close()
         return filepath
+    
+        # ========== GESTION DE RUBRICAS ==========
+
+    def agregar_criterio_rubrica(self, evaluacion_id, nombre_criterio, puntos_maximos, orden=0):
+        """Agrega un criterio a la rubrica de una evaluacion"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO rubrica_criterios (evaluacion_id, nombre_criterio, puntos_maximos, orden)
+                VALUES (?, ?, ?, ?)
+            ''', (evaluacion_id, nombre_criterio, puntos_maximos, orden))
+            conn.commit()
+            return cursor.lastrowid, None
+        except sqlite3.IntegrityError:
+            return None, "Ya existe un criterio con ese nombre en esta evaluacion"
+        except Exception as e:
+            return None, str(e)
+        finally:
+            conn.close()
+
+    def actualizar_criterio_rubrica(self, criterio_id, nombre_criterio=None, puntos_maximos=None, orden=None):
+        """Actualiza un criterio existente"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            if nombre_criterio is not None:
+                cursor.execute('UPDATE rubrica_criterios SET nombre_criterio = ? WHERE id = ?', 
+                              (nombre_criterio, criterio_id))
+            if puntos_maximos is not None:
+                cursor.execute('UPDATE rubrica_criterios SET puntos_maximos = ? WHERE id = ?', 
+                              (puntos_maximos, criterio_id))
+            if orden is not None:
+                cursor.execute('UPDATE rubrica_criterios SET orden = ? WHERE id = ?', 
+                              (orden, criterio_id))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def eliminar_criterio_rubrica(self, criterio_id):
+        """Elimina un criterio de la rubrica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM rubrica_criterios WHERE id = ?', (criterio_id,))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def get_criterios_rubrica(self, evaluacion_id):
+        """Obtiene todos los criterios de una rubrica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, nombre_criterio, puntos_maximos, orden
+            FROM rubrica_criterios
+            WHERE evaluacion_id = ?
+            ORDER BY orden, id
+        ''', (evaluacion_id,))
+        criterios = cursor.fetchall()
+        conn.close()
+        return criterios
+
+    def get_total_puntos_rubrica(self, evaluacion_id):
+        """Obtiene la suma total de puntos de la rubrica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COALESCE(SUM(puntos_maximos), 0)
+            FROM rubrica_criterios
+            WHERE evaluacion_id = ?
+        ''', (evaluacion_id,))
+        total = cursor.fetchone()[0]
+        conn.close()
+        return total
+
+    def guardar_calificacion_rubrica(self, estudiante_id, criterio_id, puntos_obtenidos, observaciones=""):
+        """Guarda la calificacion de un estudiante en un criterio especifico"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO rubrica_calificaciones (estudiante_id, criterio_id, puntos_obtenidos, observaciones)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(estudiante_id, criterio_id)
+                DO UPDATE SET puntos_obtenidos=excluded.puntos_obtenidos, 
+                             observaciones=excluded.observaciones,
+                             fecha_registro=CURRENT_TIMESTAMP
+            ''', (estudiante_id, criterio_id, puntos_obtenidos, observaciones))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def get_calificaciones_rubrica_estudiante(self, estudiante_id, evaluacion_id):
+        """Obtiene todas las calificaciones de rubrica de un estudiante para una evaluacion"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT rc.id, rc.nombre_criterio, rc.puntos_maximos, 
+                   COALESCE(rcl.puntos_obtenidos, 0) as puntos_obtenidos,
+                   rcl.observaciones
+            FROM rubrica_criterios rc
+            LEFT JOIN rubrica_calificaciones rcl ON rc.id = rcl.criterio_id 
+                                                  AND rcl.estudiante_id = ?
+            WHERE rc.evaluacion_id = ?
+            ORDER BY rc.orden, rc.id
+        ''', (estudiante_id, evaluacion_id))
+        calificaciones = cursor.fetchall()
+        conn.close()
+        return calificaciones
+
+    def calcular_nota_total_rubrica(self, estudiante_id, evaluacion_id):
+        """Calcula la nota total sumando los puntos de la rubrica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COALESCE(SUM(rcl.puntos_obtenidos), 0)
+            FROM rubrica_criterios rc
+            LEFT JOIN rubrica_calificaciones rcl ON rc.id = rcl.criterio_id 
+                                                  AND rcl.estudiante_id = ?
+            WHERE rc.evaluacion_id = ?
+        ''', (estudiante_id, evaluacion_id))
+        total = cursor.fetchone()[0]
+        conn.close()
+        return total
