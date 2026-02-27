@@ -3,11 +3,11 @@ from customtkinter import CTk, CTkFrame, CTkLabel, CTkButton, CTkOptionMenu, CTk
 import tkinter as tk
 from tkinter import messagebox, filedialog, simpledialog
 from database import DatabaseManager
-from drive_sync import GoogleDriveSync
+# NUEVO: Sistema de sincronizacion por archivo
+from sync_file import FileSyncManager
 import os
 import threading
 import platform
-from sync_manager import SyncManager
 import time
 import sys
 from tkcalendar import Calendar
@@ -70,8 +70,8 @@ class GestorNotasApp(CTk):
         self.geometry("1400x900")
         self.minsize(1200, 700)
         self.db = DatabaseManager(DB_PATH)
-        self.drive = GoogleDriveSync(credentials_path=CREDENTIALS_PATH, token_path=TOKEN_PATH)
-        self.sync_manager = SyncManager(credentials_path=CREDENTIALS_PATH, token_path=TOKEN_PATH)
+        # NUEVO: Sistema de sincronizacion por archivo compartido
+        self.file_sync = FileSyncManager(DB_PATH)
         self.current_curso = None
         self.current_evaluacion = None
         self.entries_notas = {}
@@ -79,80 +79,197 @@ class GestorNotasApp(CTk):
         self.clase_actual_id = None
         self.setup_ui()
         self.load_cursos()
-        self.setup_auto_sync()
+        # Verificar estado de sincronizacion al iniciar
+        self.after(1000, self.verificar_sincronizacion_inicio)
 
-    def setup_auto_sync(self):
-        def auto_sync_loop():
-            while self.auto_sync_enabled:
-                time.sleep(300)
-                if self.current_curso and os.path.exists(DB_PATH):
-                    try:
-                        success, msg = self.sync_manager.upload_database(DB_PATH)
-                        if success:
-                            self.after(0, lambda: self.status_label.configure(text=f"Sync: {msg}"))
-                    except:
-                        pass
-        self.auto_sync_enabled = True
-        threading.Thread(target=auto_sync_loop, daemon=True).start()
 
     def sincronizar_manual(self):
-        if not os.path.exists(CREDENTIALS_PATH):
-            messagebox.showerror("Error", "No se ha configurado Google Drive. Ve a Configurar Drive primero.")
-            return
+        """Abre dialogo de sincronizacion por archivo compartido"""
         dialog = ctk.CTkToplevel(self)
-        dialog.title("Sincronizar con Drive")
-        dialog.geometry("400x300")
+        dialog.title("Sincronizacion por Archivo Compartido")
+        dialog.geometry("500x600")
         dialog.transient(self)
         dialog.grab_set()
-        CTkLabel(dialog, text="Opciones de sincronizacion", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
-        def subir():
-            success, msg = self.sync_manager.upload_database(DB_PATH)
-            messagebox.showinfo("Resultado", msg)
-            dialog.destroy()
-        def descargar():
-            if os.path.exists(DB_PATH):
-                respuesta = messagebox.askyesno("Confirmar", "Esto reemplazara tu base de datos local. Deseas continuar?")
-                if not respuesta:
-                    return
-            success, msg = self.sync_manager.download_latest(DB_PATH)
-            if success:
-                messagebox.showinfo("Exito", msg + "\n\nReinicia la aplicacion para ver los cambios.")
-                self.load_cursos()
-            else:
-                messagebox.showerror("Error", msg)
-            dialog.destroy()
-        def ver_versiones():
-            versions = self.sync_manager.list_versions(limit=10)
-            if not versions:
-                messagebox.showinfo("Versiones", "No hay versiones en Drive")
-                return
-            texto = "Versiones disponibles:\n\n"
-            for v in versions[:5]:
-                texto += f"- {v['fecha']} por {v['user']}\n"
-            messagebox.showinfo("Versiones", texto)
-        CTkButton(dialog, text="Subir ahora", command=subir, fg_color="blue").pack(pady=5, fill="x", padx=20)
-        CTkButton(dialog, text="Descargar ultima", command=descargar, fg_color="green").pack(pady=5, fill="x", padx=20)
-        CTkButton(dialog, text="Ver versiones", command=ver_versiones, fg_color="gray").pack(pady=5, fill="x", padx=20)
-        def toggle_auto():
-            self.auto_sync_enabled = not self.auto_sync_enabled
-            estado = "ACTIVADA" if self.auto_sync_enabled else "DESACTIVADA"
-            btn_auto.configure(text=f"Auto-sync: {estado}")
-        estado = "ACTIVADA" if self.auto_sync_enabled else "DESACTIVADA"
-        btn_auto = CTkButton(dialog, text=f"Auto-sync: {estado}", command=toggle_auto, fg_color="orange")
-        btn_auto.pack(pady=10, fill="x", padx=20)
-
-    def compartir_carpeta(self):
-        if not os.path.exists(CREDENTIALS_PATH):
-            messagebox.showerror("Error", "Configura Google Drive primero")
-            return
-        dialog = CTkInputDialog(text="Email del colaborador:", title="Compartir acceso")
-        email = dialog.get_input()
-        if email and '@' in email:
-            success, msg = self.sync_manager.share_folder(email)
+        
+        # Centrar
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (500 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (600 // 2)
+        dialog.geometry(f"500x600+{x}+{y}")
+        
+        CTkLabel(dialog, text="Sincronizacion de Datos", 
+                font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 10))
+        
+        # Estado actual
+        estado, mensaje, info = self.file_sync.check_sync_status()
+        
+        frame_estado = CTkFrame(dialog)
+        frame_estado.pack(fill="x", padx=20, pady=10)
+        
+        CTkLabel(frame_estado, text="Estado:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(10, 0))
+        
+        color_estado = "green" if estado == "sincronizado" else "orange" if estado == "necesita_importar" else "red"
+        lbl_estado = CTkLabel(frame_estado, text=mensaje, text_color=color_estado,
+                             font=ctk.CTkFont(weight="bold"))
+        lbl_estado.pack(anchor="w", padx=10, pady=5)
+        
+        if info:
+            info_text = f"Ultima sync: {info.get('timestamp_sync', 'N/A')}\n"
+            info_text += f"Dispositivo: {info.get('dispositivo_origen', 'N/A')}"
+            CTkLabel(frame_estado, text=info_text, font=ctk.CTkFont(size=11), 
+                    text_color="gray").pack(anchor="w", padx=10, pady=(0, 10))
+        
+        # Carpeta configurada
+        CTkLabel(dialog, text="Carpeta de sincronizacion:", 
+                font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=20, pady=(20, 5))
+        
+        folder_text = self.file_sync.sync_folder or "No configurada"
+        lbl_folder = CTkLabel(dialog, text=folder_text, font=ctk.CTkFont(size=11))
+        lbl_folder.pack(anchor="w", padx=20)
+        
+        # Botones principales
+        btn_frame = CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=20)
+        
+        def exportar():
+            success, msg = self.file_sync.export_to_sync()
             if success:
                 messagebox.showinfo("Exito", msg)
+                lbl_estado.configure(text="Sincronizado", text_color="green")
             else:
                 messagebox.showerror("Error", msg)
+        
+        def importar():
+            success, msg, info_extra = self.file_sync.import_from_sync()
+            if success:
+                if info_extra and info_extra != "sincronizado":
+                    msg += f"\n\nExportado desde: {info_extra.get('dispositivo_origen', 'N/A')}"
+                messagebox.showinfo("Exito", msg)
+                self.load_cursos()
+                lbl_estado.configure(text="Sincronizado", text_color="green")
+            else:
+                messagebox.showerror("Error", msg)
+        
+        CTkButton(btn_frame, text="Exportar a carpeta (Subir)", 
+                 command=exportar, fg_color="blue", height=40).pack(fill="x", pady=5)
+        CTkButton(btn_frame, text="Importar de carpeta (Descargar)", 
+                 command=importar, fg_color="green", height=40).pack(fill="x", pady=5)
+        
+        # Configuracion
+        CTkFrame(dialog, height=2, fg_color="gray").pack(fill="x", padx=20, pady=20)
+        
+        CTkLabel(dialog, text="Configuracion", 
+                font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=20)
+        
+        # Detectar carpetas comunes
+        carpetas_default = self.file_sync.get_default_sync_paths()
+        
+        if carpetas_default:
+            CTkLabel(dialog, text="Servicios detectados:", 
+                    font=ctk.CTkFont(size=12)).pack(anchor="w", padx=20, pady=(10, 5))
+            
+            for nombre, ruta in carpetas_default:
+                frame_servicio = CTkFrame(dialog)
+                frame_servicio.pack(fill="x", padx=20, pady=2)
+                
+                CTkLabel(frame_servicio, text=nombre, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10)
+                CTkLabel(frame_servicio, text=ruta, font=ctk.CTkFont(size=10)).pack(side="left", padx=5)
+                
+                def usar_ruta(r=ruta):
+                    success, msg = self.file_sync.setup_sync_folder(r)
+                    if success:
+                        lbl_folder.configure(text=r)
+                        messagebox.showinfo("Exito", msg)
+                    else:
+                        messagebox.showerror("Error", msg)
+                
+                CTkButton(frame_servicio, text="Usar", width=60, 
+                         command=usar_ruta).pack(side="right", padx=5)
+        
+        # Seleccion manual
+        def seleccionar_carpeta():
+            folder = filedialog.askdirectory(title="Seleccionar carpeta de sincronizacion")
+            if folder:
+                success, msg = self.file_sync.setup_sync_folder(folder)
+                if success:
+                    lbl_folder.configure(text=folder)
+                    messagebox.showinfo("Exito", msg)
+                else:
+                    messagebox.showerror("Error", msg)
+        
+        CTkButton(dialog, text="Seleccionar carpeta manualmente...", 
+                 command=seleccionar_carpeta).pack(fill="x", padx=20, pady=10)
+        
+        # Resolver conflicto (solo visible si hay conflicto)
+        if estado == "conflicto":
+            CTkFrame(dialog, height=2, fg_color="red").pack(fill="x", padx=20, pady=20)
+            
+            CTkLabel(dialog, text="Conflicto detectado", 
+                    font=ctk.CTkFont(size=14, weight="bold"), text_color="red").pack(anchor="w", padx=20)
+            
+            CTkLabel(dialog, text="Ambas versiones tienen cambios. Elige cual conservar:", 
+                    font=ctk.CTkFont(size=12)).pack(anchor="w", padx=20, pady=5)
+            
+            conflict_frame = CTkFrame(dialog)
+            conflict_frame.pack(fill="x", padx=20, pady=10)
+            
+            def resolver_usar_local():
+                if messagebox.askyesno("Confirmar", "Esto sobrescribira la version en la carpeta compartida con tu version local. Continuar?"):
+                    success, msg = self.file_sync.resolver_conflicto(usar_local=True)
+                    messagebox.showinfo("Resultado", msg)
+                    if success:
+                        lbl_estado.configure(text="Sincronizado", text_color="green")
+            
+            def resolver_usar_nube():
+                if messagebox.askyesno("Confirmar", "Esto sobrescribira tu base de datos local con la version de la carpeta compartida. Continuar?"):
+                    success, msg, _ = self.file_sync.resolver_conflicto(usar_local=False)
+                    messagebox.showinfo("Resultado", msg)
+                    if success:
+                        self.load_cursos()
+                        lbl_estado.configure(text="Sincronizado", text_color="green")
+            
+            CTkButton(conflict_frame, text="Usar version LOCAL (subir)", 
+                     command=resolver_usar_local, fg_color="orange", height=35).pack(fill="x", pady=5)
+            CTkButton(conflict_frame, text="Usar version de CARPETA (descargar)", 
+                     command=resolver_usar_nube, fg_color="orange", height=35).pack(fill="x", pady=5)
+        
+        CTkButton(dialog, text="Cerrar", command=dialog.destroy, 
+                 fg_color="gray").pack(pady=20)
+
+    def verificar_sincronizacion_inicio(self):
+        """Verifica el estado de sincronizacion al iniciar la aplicacion"""
+        estado, mensaje, info = self.file_sync.check_sync_status()
+        
+        if estado == "necesita_importar":
+            respuesta = messagebox.askyesno(
+                "Sincronizacion", 
+                f"Hay una version mas reciente en la carpeta compartida.\n"
+                f"Dispositivo origen: {info.get('dispositivo_origen', 'N/A')}\n"
+                f"Fecha: {info.get('timestamp_sync', 'N/A')}\n\n"
+                f"Deseas importar los cambios ahora?"
+            )
+            if respuesta:
+                success, msg, _ = self.file_sync.import_from_sync()
+                if success:
+                    messagebox.showinfo("Exito", "Datos importados correctamente.\nLa aplicacion se actualizara.")
+                    self.load_cursos()
+                else:
+                    messagebox.showerror("Error", msg)
+        
+        elif estado == "conflicto":
+            messagebox.showwarning(
+                "Conflicto de sincronizacion",
+                "Se detectaron cambios tanto en tu dispositivo como en la carpeta compartida.\n"
+                "Ve a Herramientas > Sincronizar para resolver el conflicto."
+            )
+        
+        # Actualizar status bar
+        if estado == "sincronizado":
+            self.status_label.configure(text="Sync: Sincronizado", text_color="green")
+        elif estado == "no_config":
+            self.status_label.configure(text="Sync: Sin configurar", text_color="gray")
+        else:
+            self.status_label.configure(text=f"Sync: {mensaje[:30]}...", text_color="orange")
 
     def crear_curso(self):
         dialog = CTkInputDialog(text="Nombre del nuevo curso:", title="Crear Curso")
@@ -1110,13 +1227,16 @@ class GestorNotasApp(CTk):
                 mensaje_extra="\n\nEsta evaluacion no tiene rubrica definida.\nVe a 'Rubrica' para crearla.")
             return
         
-        # Calcular altura necesaria basada en número de criterios
-        altura_por_criterio = 85
-        altura_minima = 500
+        # Calcular altura necesaria basada en numero de criterios
+        # Aumentado el espacio por criterio y el espacio base para asegurar visibilidad de botones
+        altura_por_criterio = 90
+        altura_minima = 550
         altura_maxima = 900
-        altura_calculada = min(max(altura_minima, 350 + (len(criterios) * altura_por_criterio)), altura_maxima)
+        # Altura base aumentada para asegurar espacio para header, info, titulo, total y botones
+        altura_base = 400
+        altura_calculada = min(max(altura_minima, altura_base + (len(criterios) * altura_por_criterio)), altura_maxima)
         
-        # Crear modal con tamaño dinámico
+        # Crear modal con tamano dinamico
         modal = ctk.CTkToplevel(self)
         modal.title(f"Calificar: {nombre}")
         modal.geometry(f"650x{altura_calculada}")
@@ -1142,7 +1262,7 @@ class GestorNotasApp(CTk):
                 font=ctk.CTkFont(size=16, weight="bold"),
                 text_color="white").pack(pady=5)
         
-        # Info básica en una línea (más compacto)
+        # Info basica en una linea (mas compacto)
         info_frame = CTkFrame(main_frame)
         info_frame.pack(fill="x", pady=2)
         
@@ -1154,18 +1274,21 @@ class GestorNotasApp(CTk):
                 font=ctk.CTkFont(size=11),
                 text_color="gray").pack(pady=2)
         
-        # Título de rúbrica compacto
+        # Titulo de rubrica compacto
         title_frame = CTkFrame(main_frame)
         title_frame.pack(fill="x", pady=5)
         
-        CTkLabel(title_frame, text=f"📋 {eval_nombre}", 
+        CTkLabel(title_frame, text=f"{eval_nombre}", 
                 font=ctk.CTkFont(size=14, weight="bold")).pack(side="left", padx=5)
-        CTkLabel(title_frame, text=f"(Máx: {puntos_max_eval} pts)", 
+        CTkLabel(title_frame, text=f"(Max: {puntos_max_eval} pts)", 
                 font=ctk.CTkFont(size=11),
                 text_color="gray").pack(side="left", padx=5)
         
-        # Frame scrollable para criterios - altura flexible
-        altura_scroll = altura_calculada - 280  # Restar espacio para header, info, botones
+        # Frame scrollable para criterios - altura flexible pero con minimo garantizado
+        # Calcular altura del scroll dejando espacio fijo para elementos inferiores
+        altura_fija_inferior = 180  # Espacio reservado para total, botones y margenes
+        altura_scroll = max(200, altura_calculada - 320)  # Minimo 200px para el scroll
+        
         scroll_rubrica = CTkScrollableFrame(main_frame, 
                                            label_text=f"Criterios ({len(criterios)})", 
                                            height=altura_scroll)
@@ -1177,15 +1300,15 @@ class GestorNotasApp(CTk):
         # Diccionario para guardar entries
         entries_criterios = {}
         
-        # Crear campos para cada criterio (más compactos)
+        # Crear campos para cada criterio (mas compactos)
         for crit in calificaciones_previas:
             crit_id, nombre_criterio, puntos_max, puntos_obtenidos, obs = crit
             
-            # Frame más compacto para cada criterio
+            # Frame mas compacto para cada criterio
             frame_crit = CTkFrame(scroll_rubrica)
             frame_crit.pack(fill="x", pady=3, padx=3)
             
-            # Nombre y máximo en una línea
+            # Nombre y maximo en una linea
             header_crit = CTkFrame(frame_crit, fg_color="transparent")
             header_crit.pack(fill="x", padx=5, pady=(3, 0))
             
@@ -1195,11 +1318,11 @@ class GestorNotasApp(CTk):
                     font=ctk.CTkFont(size=10),
                     text_color="gray").pack(side="left", padx=5)
             
-            # Frame para inputs en una línea
+            # Frame para inputs en una linea
             input_frame = CTkFrame(frame_crit, fg_color="transparent")
             input_frame.pack(fill="x", padx=5, pady=3)
             
-            # Entry para puntos (más compacto)
+            # Entry para puntos (mas compacto)
             var_puntos = ctk.StringVar(value=str(puntos_obtenidos) if puntos_obtenidos > 0 else "")
             entry_puntos = CTkEntry(input_frame, width=80, height=28,
                                    textvariable=var_puntos,
@@ -1210,7 +1333,7 @@ class GestorNotasApp(CTk):
             CTkLabel(input_frame, text=f"{puntos_max}", 
                     font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=2)
             
-            # Entry para observaciones (más ancho)
+            # Entry para observaciones (mas ancho)
             var_obs = ctk.StringVar(value=obs or "")
             entry_obs = CTkEntry(input_frame, placeholder_text="Obs...", 
                                 textvariable=var_obs, width=300, height=28)
@@ -1224,11 +1347,11 @@ class GestorNotasApp(CTk):
                 'nombre': nombre_criterio
             }
         
-        # Frame inferior fijo (no se mueve con el scroll)
+        # Frame inferior fijo (no se mueve con el scroll) - SIEMPRE VISIBLE
         bottom_frame = CTkFrame(main_frame)
         bottom_frame.pack(fill="x", pady=5)
         
-        # Label para mostrar total (más visible)
+        # Label para mostrar total (mas visible)
         lbl_total = CTkLabel(bottom_frame, 
                             text=f"Total: 0 / {puntos_max_eval}",
                             font=ctk.CTkFont(size=18, weight="bold"))
@@ -1305,14 +1428,14 @@ class GestorNotasApp(CTk):
                 messagebox.showerror("Error", f"No se pudo guardar: {str(e)}")
         
         # Botones grandes y visibles
-        CTkButton(btn_frame, text="✓ ACEPTAR", 
+        CTkButton(btn_frame, text="ACEPTAR", 
                  command=aceptar_y_guardar,
                  fg_color="green", 
                  hover_color="darkgreen",
                  height=45,
                  font=ctk.CTkFont(size=15, weight="bold")).pack(side="left", padx=5, fill="x", expand=True)
         
-        CTkButton(btn_frame, text="✗ Cancelar", 
+        CTkButton(btn_frame, text="Cancelar", 
                  command=modal.destroy,
                  fg_color="gray", 
                  hover_color="darkgray",
@@ -1612,41 +1735,6 @@ class GestorNotasApp(CTk):
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo exportar:\n{str(e)}")
 
-    def sincronizar_drive(self):
-        if not os.path.exists(CREDENTIALS_PATH):
-            messagebox.showerror("Error", "No se encontro credentials.json. Configura Google Drive primero.")
-            return
-        self.status_label.configure(text="Sincronizando...")
-        self.update()
-        def sync_task():
-            success, msg = self.drive.sincronizar_db(DB_PATH)
-            self.after(0, lambda: self.sync_completed(success, msg))
-        thread = threading.Thread(target=sync_task)
-        thread.start()
-
-    def sync_completed(self, success, msg):
-        if success:
-            self.status_label.configure(text="Sincronizado")
-            messagebox.showinfo("Exito", "Base de datos sincronizada con Google Drive")
-        else:
-            self.status_label.configure(text="Error")
-            messagebox.showerror("Error", msg)
-
-    def configurar_drive(self):
-        instrucciones = """Para configurar Google Drive:
-
-1. Ve a https://console.cloud.google.com/
-2. Crea un nuevo proyecto
-3. Habilita la API de Google Drive
-4. Ve a "Credenciales" -> "Crear credenciales" -> "ID de cliente OAuth"
-5. Configura la pantalla de consentimiento (Externo)
-6. Agrega tu email como usuario de prueba
-7. Descarga el archivo JSON y guardalo como 'credentials.json' en esta carpeta
-
-Deseas abrir la consola de Google Cloud ahora?"""
-        if messagebox.askyesno("Configurar Google Drive", instrucciones):
-            import webbrowser
-            webbrowser.open("https://console.cloud.google.com/")
 
     def setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
@@ -1708,16 +1796,17 @@ Deseas abrir la consola de Google Cloud ahora?"""
         CTkButton(btn_frame, text="Editar", command=self.editar_estudiante).pack(side="left", fill="x", expand=True, padx=2)
         CTkButton(btn_frame, text="Eliminar", command=self.eliminar_estudiante, fg_color="red", hover_color="darkred").pack(side="left", fill="x", expand=True, padx=2)
         
-        # --- Frame de Herramientas ---
+       # --- Frame de Herramientas ---
         self.tools_frame = CTkFrame(self.sidebar_scroll)
         self.tools_frame.pack(fill="x", pady=5)
         
         CTkLabel(self.tools_frame, text="Herramientas", font=ctk.CTkFont(weight="bold")).pack(pady=5)
         
         CTkButton(self.tools_frame, text="Exportar a Excel", command=self.exportar_excel).pack(pady=2, fill="x", padx=5)
-        CTkButton(self.tools_frame, text="Configurar Drive", command=self.configurar_drive).pack(pady=2, fill="x", padx=10)
-        CTkButton(self.tools_frame, text="Sincronizar", command=self.sincronizar_manual, fg_color="green", hover_color="darkgreen").pack(pady=2, fill="x", padx=10)
-        CTkButton(self.tools_frame, text="Compartir acceso", command=self.compartir_carpeta, fg_color="blue", hover_color="darkblue").pack(pady=2, fill="x", padx=10)
+        # NUEVO: Sincronizacion por archivo compartido
+        CTkButton(self.tools_frame, text="Sincronizar datos", 
+                 command=self.sincronizar_manual, 
+                 fg_color="green", hover_color="darkgreen").pack(pady=2, fill="x", padx=10)
         
         # --- Label de Estado ---
         self.status_label = CTkLabel(self.sidebar_scroll, text="Estado: Listo", font=ctk.CTkFont(size=12))
