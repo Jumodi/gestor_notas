@@ -20,14 +20,25 @@ class DatabaseManager:
         
         # Tabla de cursos
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cursos (
+            CREATE TABLE IF NOT EXISTS clases (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT UNIQUE NOT NULL,
-                descripcion TEXT,
-                total_estudiantes INTEGER DEFAULT 0,
-                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                curso_id INTEGER NOT NULL,
+                grupo INTEGER DEFAULT 1,  -- NUEVO: grupo al que pertenece la clase
+                encabezado TEXT NOT NULL,
+                topicos TEXT,
+                contenido TEXT,
+                observaciones TEXT,
+                fecha_clase DATE,
+                fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (curso_id) REFERENCES cursos(id)
             )
         ''')
+        
+        # Migración: agregar columna grupo si no existe
+        try:
+            cursor.execute("ALTER TABLE clases ADD COLUMN grupo INTEGER DEFAULT 1")
+        except sqlite3.OperationalError:
+            pass
         
         # Tabla de evaluaciones
         cursor.execute('''
@@ -51,9 +62,15 @@ class DatabaseManager:
                 nombre TEXT NOT NULL,
                 grupo INTEGER DEFAULT 1,
                 email TEXT,
+                carne TEXT,
                 FOREIGN KEY (curso_id) REFERENCES cursos(id)
             )
         ''')
+        
+        try:
+            cursor.execute("ALTER TABLE estudiantes ADD COLUMN carne TEXT")
+        except sqlite3.OperationalError:
+            pass  # Columna ya existe
         
         # Tabla de notas
         cursor.execute('''
@@ -103,6 +120,29 @@ class DatabaseManager:
                 FOREIGN KEY (clase_id) REFERENCES clases(id) ON DELETE CASCADE
             )
         ''')
+
+        # Tabla de asistencia CON GRUPO
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS asistencia (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                curso_id INTEGER NOT NULL,
+                grupo INTEGER NOT NULL DEFAULT 1,
+                estudiante_id INTEGER NOT NULL,
+                fecha TEXT NOT NULL,
+                estado TEXT NOT NULL,
+                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (curso_id) REFERENCES cursos(id),
+                FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id),
+                UNIQUE(curso_id, grupo, estudiante_id, fecha)
+            )
+        ''')
+        
+        # Migración: agregar columna grupo si no existe
+        try:
+            cursor.execute("ALTER TABLE asistencia ADD COLUMN grupo INTEGER DEFAULT 1")
+        except sqlite3.OperationalError:
+            pass
+
         conn.commit()
         conn.close()
     
@@ -286,15 +326,15 @@ class DatabaseManager:
     
     # ========== GESTIÓN DE ESTUDIANTES ==========
     
-    def agregar_estudiante(self, curso_id, nombre, grupo=1, email=None):
+    def agregar_estudiante(self, curso_id, nombre, grupo=1, email=None, carne=None):
         """Agrega un estudiante a un curso"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO estudiantes (curso_id, nombre, grupo, email)
-                VALUES (?, ?, ?, ?)
-            ''', (curso_id, nombre, grupo, email))
+                INSERT INTO estudiantes (curso_id, nombre, grupo, email, carne)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (curso_id, nombre, grupo, email, carne))
             conn.commit()
             return cursor.lastrowid, None
         except Exception as e:
@@ -302,7 +342,7 @@ class DatabaseManager:
         finally:
             conn.close()
     
-    def actualizar_estudiante(self, estudiante_id, nombre=None, grupo=None, email=None):
+    def actualizar_estudiante(self, estudiante_id, nombre=None, grupo=None, email=None, carne=None):
         """Actualiza datos de un estudiante"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -313,7 +353,9 @@ class DatabaseManager:
                 cursor.execute('UPDATE estudiantes SET grupo = ? WHERE id = ?', (grupo, estudiante_id))
             if email is not None:
                 cursor.execute('UPDATE estudiantes SET email = ? WHERE id = ?', (email, estudiante_id))
-            conn.commit()
+            if carne is not None:
+                cursor.execute('UPDATE estudiantes SET carne = ? WHERE id = ?', (carne, estudiante_id))
+            conn.commit() 
             return True, None
         except Exception as e:
             return False, str(e)
@@ -335,18 +377,19 @@ class DatabaseManager:
             conn.close()
     
     def get_estudiantes(self, curso_id, grupo=None):
+        """Obtiene estudiantes, ahora incluye carne"""
         conn = self.get_connection()
         cursor = conn.cursor()
         if grupo:
             cursor.execute('''
-                SELECT id, nombre, grupo, email 
+                SELECT id, nombre, grupo, email, carne 
                 FROM estudiantes 
                 WHERE curso_id = ? AND grupo = ?
                 ORDER BY nombre
             ''', (curso_id, grupo))
         else:
             cursor.execute('''
-                SELECT id, nombre, grupo, email 
+                SELECT id, nombre, grupo, email, carne 
                 FROM estudiantes 
                 WHERE curso_id = ?
                 ORDER BY grupo, nombre
@@ -421,15 +464,15 @@ class DatabaseManager:
     
         # ========== GESTIÓN DE CLASES ==========
     
-    def crear_clase(self, curso_id, encabezado, topicos="", contenido="", observaciones="", fecha_clase=None):
+    def crear_clase(self, curso_id, encabezado, topicos="", contenido="", observaciones="", fecha_clase=None, grupo=1):
         """Crea una nueva clase en la base de datos"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO clases (curso_id, encabezado, topicos, contenido, observaciones, fecha_clase)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (curso_id, encabezado, topicos, contenido, observaciones, fecha_clase))
+                INSERT INTO clases (curso_id, grupo, encabezado, topicos, contenido, observaciones, fecha_clase)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (curso_id, grupo, encabezado, topicos, contenido, observaciones, fecha_clase))
             conn.commit()
             return cursor.lastrowid, None
         except Exception as e:
@@ -437,7 +480,7 @@ class DatabaseManager:
         finally:
             conn.close()
     
-    def actualizar_clase(self, clase_id, encabezado=None, topicos=None, contenido=None, observaciones=None, fecha_clase=None):
+    def actualizar_clase(self, clase_id, encabezado=None, grupo=None, topicos=None, contenido=None, observaciones=None, fecha_clase=None):
         """Actualiza una clase existente"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -452,6 +495,8 @@ class DatabaseManager:
                 cursor.execute('UPDATE clases SET observaciones = ? WHERE id = ?', (observaciones, clase_id))
             if fecha_clase is not None:
                 cursor.execute('UPDATE clases SET fecha_clase = ? WHERE id = ?', (fecha_clase, clase_id))
+            if grupo is not None:
+                cursor.execute('UPDATE clases SET grupo = ? WHERE id = ?', (grupo, clase_id))
             # Actualizar fecha de modificación
             cursor.execute('UPDATE clases SET fecha_modificacion = CURRENT_TIMESTAMP WHERE id = ?', (clase_id,))
             conn.commit()
@@ -475,16 +520,24 @@ class DatabaseManager:
         finally:
             conn.close()
     
-    def get_clases(self, curso_id):
-        """Obtiene todas las clases de un curso"""
+    def get_clases(self, curso_id, grupo=None):
+        """Obtiene clases de un curso, opcionalmente filtradas por grupo"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT id, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion
-            FROM clases 
-            WHERE curso_id = ? 
-            ORDER BY fecha_modificacion DESC
-        ''', (curso_id,))
+        if grupo:
+            cursor.execute('''
+                SELECT id, grupo, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion
+                FROM clases 
+                WHERE curso_id = ? AND grupo = ?
+                ORDER BY fecha_clase DESC
+            ''', (curso_id, grupo))
+        else:
+            cursor.execute('''
+                SELECT id, grupo, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion
+                FROM clases 
+                WHERE curso_id = ? 
+                ORDER BY fecha_clase DESC
+            ''', (curso_id,))
         clases = cursor.fetchall()
         conn.close()
         return clases
@@ -496,7 +549,7 @@ class DatabaseManager:
         
         # Obtener datos de la clase
         cursor.execute('''
-            SELECT id, curso_id, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion
+            SELECT id, curso_id, grupo, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion
             FROM clases WHERE id = ?
         ''', (clase_id,))
         clase = cursor.fetchone()
@@ -514,12 +567,13 @@ class DatabaseManager:
         return {
             "id": clase[0],
             "curso_id": clase[1],
-            "encabezado": clase[2],
-            "topicos": clase[3],
-            "contenido": clase[4],
-            "observaciones": clase[5],
-            "fecha_clase": clase[6],
-            "fecha_modificacion": clase[7],
+            "grupo": clase[2],
+            "encabezado": clase[3],
+            "topicos": clase[4],
+            "contenido": clase[5],
+            "observaciones": clase[6],
+            "fecha_clase": clase[7],
+            "fecha_modificacion": clase[8],
             "links": links
         }
     
@@ -548,6 +602,105 @@ class DatabaseManager:
             conn.commit()
             return True, None
         except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    # ========== GESTIÓN DE ASISTENCIA ==========
+
+    def guardar_asistencia(self, curso_id, grupo, fecha, asistencia_dict):
+        """Guarda el registro de asistencia para una fecha"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            for estudiante_id, estado in asistencia_dict.items():
+                # Convertir estudiante_id a int para consistencia
+                estudiante_id = int(estudiante_id)
+                
+                # PRIMERO: intentar actualizar si existe
+                cursor.execute('''
+                    UPDATE asistencia 
+                    SET estado = ?, fecha_registro = CURRENT_TIMESTAMP
+                    WHERE curso_id = ? AND grupo = ? AND estudiante_id = ? AND fecha = ?
+                ''', (estado, curso_id, grupo, estudiante_id, fecha))
+                
+                # Si no se actualizó ninguna fila, hacer insert
+                if cursor.rowcount == 0:
+                    cursor.execute('''
+                        INSERT INTO asistencia (curso_id, grupo, estudiante_id, fecha, estado)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (curso_id, grupo, estudiante_id, fecha, estado))
+                    
+            conn.commit()
+            return True, None
+        except Exception as e:
+            conn.rollback()
+            return False, str(e)
+        finally:
+            conn.close()
+    
+    def get_asistencia_fecha(self, curso_id, grupo, fecha):
+        """Obtiene la asistencia de todos los estudiantes para una fecha específica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT estudiante_id, estado 
+            FROM asistencia 
+            WHERE curso_id = ? AND grupo = ? AND fecha = ?
+        ''', (curso_id, grupo, fecha))
+        resultados = {row[0]: row[1] for row in cursor.fetchall()}
+        conn.close()
+        return resultados
+        
+    def get_estadisticas_asistencia(self, curso_id, grupo, fecha):
+        """Obtiene estadísticas de asistencia para una fecha"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT estado, COUNT(*) 
+            FROM asistencia 
+            WHERE curso_id = ? AND grupo = ? AND fecha = ?
+            GROUP BY estado
+        ''', (curso_id, grupo, fecha))
+        stats = {row[0]: row[1] for row in cursor.fetchall()}
+        conn.close()
+        return stats
+    
+    def get_asistencia_estudiante(self, estudiante_id, curso_id=None):
+        """Obtiene todo el historial de asistencia de un estudiante"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        if curso_id:
+            cursor.execute('''
+                SELECT fecha, estado 
+                FROM asistencia 
+                WHERE estudiante_id = ? AND curso_id = ?
+                ORDER BY fecha DESC
+            ''', (estudiante_id, curso_id))
+        else:
+            cursor.execute('''
+                SELECT fecha, estado 
+                FROM asistencia 
+                WHERE estudiante_id = ?
+                ORDER BY fecha DESC
+            ''', (estudiante_id,))
+        resultados = cursor.fetchall()
+        conn.close()
+        return resultados
+    
+    def eliminar_asistencia_fecha(self, curso_id, grupo, fecha):
+        """Elimina todos los registros de asistencia para una fecha específica (permite re-guardar)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                DELETE FROM asistencia 
+                WHERE curso_id = ? AND grupo = ? AND fecha = ?
+            ''', (curso_id, grupo, fecha))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            conn.rollback()
             return False, str(e)
         finally:
             conn.close()
@@ -592,7 +745,7 @@ class DatabaseManager:
         
         # Datos de estudiantes
         for est in ests:
-            est_id, nombre, grupo, email = est
+            est_id, nombre, grupo, email, carne = est
             row = [est_id, nombre, grupo, email or '']
             
             for eval_id in eval_ids:
