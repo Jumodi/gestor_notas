@@ -648,7 +648,9 @@ class DatabaseManager:
             FROM asistencia 
             WHERE curso_id = ? AND grupo = ? AND fecha = ?
         ''', (curso_id, grupo, fecha))
-        resultados = {row[0]: row[1] for row in cursor.fetchall()}
+        
+        # Convertir estudiante_id a string para consistencia con el diccionario
+        resultados = {str(row[0]): row[1] for row in cursor.fetchall()}
         conn.close()
         return resultados
         

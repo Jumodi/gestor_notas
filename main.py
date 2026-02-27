@@ -1261,7 +1261,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
         self.setup_tab_clases()
         self.setup_tab_config()
         self.setup_tab_resumen()
-        
+
 
     def setup_tab_clases(self):
         """Configura la pestaña de Control de Clases con scroll"""
@@ -1300,10 +1300,15 @@ Deseas abrir la consola de Google Cloud ahora?"""
                                         font=ctk.CTkFont(size=12))
         self.btn_fecha_clase.pack(side="left")
         
-        # Botón para ir a "hoy"
+        # Botón para ir a "hoy" - FUNCIÓN DEFINIDA ANTES DE USARLA
+        def poner_fecha_hoy():
+            hoy = date.today().strftime("%d/%m/%Y")
+            self.fecha_clase_var.set(hoy)
+            self.btn_fecha_clase.configure(text=hoy)
+
         CTkButton(fecha_row, text="Hoy", width=60, height=32,
-                 command=self.fecha_clase_hoy,
-                 fg_color="gray").pack(side="left", padx=5)
+                command=poner_fecha_hoy,
+                fg_color="gray").pack(side="left", padx=5)
         
         # --- Selector de Grupo ---
         grupo_row = CTkFrame(self.clases_content_frame, fg_color="transparent")
@@ -1313,11 +1318,15 @@ Deseas abrir la consola de Google Cloud ahora?"""
                 font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0, 10))
         
         self.grupo_clase_var = ctk.StringVar(value="1")
+        def cambiar_grupo(nuevo_grupo):
+            self.lbl_info_grupo_clase.configure(text=f"Clases para Grupo {nuevo_grupo}")
+            self.cargar_lista_clases()  # Recargar lista filtrada por grupo
+
         self.combo_grupo_clase = CTkOptionMenu(grupo_row, 
-                                              values=["1", "2", "3", "4", "5"],
-                                              variable=self.grupo_clase_var,
-                                              width=80,
-                                              command=self.on_cambio_grupo_clase)
+                                            values=["1", "2", "3", "4", "5"],
+                                            variable=self.grupo_clase_var,
+                                            width=80,
+                                            command=cambiar_grupo)
         self.combo_grupo_clase.pack(side="left")
         
         # Label que muestra info del grupo
@@ -1327,7 +1336,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
                                             text_color="gray")
         self.lbl_info_grupo_clase.pack(side="left", padx=15)
         
-        # --- Encabezado de la clase (sin fecha) ---
+        # --- Encabezado de la clase ---
         CTkLabel(self.clases_content_frame, text="Título de la Clase:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
         
@@ -1336,7 +1345,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
                                                height=35, font=ctk.CTkFont(size=14))
         self.entry_encabezado_clase.pack(fill="x", padx=10, pady=5)
         
-                # --- Tópicos por tratar ---
+        # --- Tópicos por tratar ---
         CTkLabel(self.clases_content_frame, text="Topicos que se trataran:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
         
@@ -1383,7 +1392,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
         self.texto_clase = tk.Text(text_container, wrap="word", 
                                   font=("Segoe UI", 12), 
                                   height=15,
-                                  bg="#2b2b2b",  # Fondo oscuro para modo oscuro
+                                  bg="#2b2b2b",
                                   fg="white",
                                   insertbackground="white",
                                   relief="flat",
@@ -1447,15 +1456,6 @@ Deseas abrir la consola de Google Cloud ahora?"""
         
         CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
         
-        # --- Botón de Agrupamiento Aleatorio ---
-        CTkLabel(self.clases_tools_frame, text="Generador de Grupos", 
-                font=ctk.CTkFont(weight="bold")).pack(pady=5, padx=10)
-        
-        CTkButton(self.clases_tools_frame, text="Crear Grupos Aleatorios", 
-                 command=self.abrir_generador_grupos, height=50, fg_color="teal",
-                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10, padx=10, fill="x")
-        
-        CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
         
         # --- Estado ---
         self.status_clases_label = CTkLabel(self.clases_tools_frame, 
@@ -1468,6 +1468,13 @@ Deseas abrir la consola de Google Cloud ahora?"""
         self.entry_topicos.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
         self.entry_observaciones.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
         self.texto_clase.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
+
+    def get_grupo_clase_actual(self):
+        """Obtiene el número de grupo actualmente seleccionado en Control de Clases"""
+        try:
+            return int(self.grupo_clase_var.get())
+        except (ValueError, AttributeError):
+            return 1  
 
     def agregar_campo_link(self):
         frame_link = CTkFrame(self.frame_links)
@@ -1721,6 +1728,34 @@ Deseas abrir la consola de Google Cloud ahora?"""
         except Exception as e:
             messagebox.showerror("Error", f"Error al cargar la clase: {str(e)}")
 
+    def eliminar_clase_guardada(self):
+        """Elimina la clase seleccionada del combo de clases guardadas"""
+        seleccion = self.combo_clases_guardadas.get()
+        
+        if seleccion == "-- Nueva Clase --" or not seleccion:
+            messagebox.showwarning("Advertencia", "Selecciona una clase guardada para eliminar")
+            return
+        
+        clase_id = self.clases_dict.get(seleccion)
+        if not clase_id:
+            messagebox.showerror("Error", "No se encontró el ID de la clase")
+            return
+        
+        # Confirmar eliminación
+        if messagebox.askyesno("Confirmar", f"¿Eliminar permanentemente la clase '{seleccion}'?\n\nEsta acción no se puede deshacer."):
+            try:
+                success, error = self.db.eliminar_clase(clase_id)
+                if success:
+                    messagebox.showinfo("Éxito", "Clase eliminada correctamente")
+                    self.status_clases_label.configure(text="Clase eliminada")
+                    # Limpiar campos y recargar lista
+                    self.limpiar_campos_clase()
+                    self.cargar_lista_clases()
+                else:
+                    messagebox.showerror("Error", f"No se pudo eliminar la clase:\n{error}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al eliminar: {str(e)}")
+
     def limpiar_campos_clase(self):
         """Limpia todos los campos de la clase para crear una nueva"""
         self.entry_encabezado_clase.delete(0, "end")
@@ -1748,7 +1783,6 @@ Deseas abrir la consola de Google Cloud ahora?"""
 
     def abrir_selector_fecha(self):
         """Abre un calendario emergente para seleccionar la fecha"""
-        # Crear ventana emergente
         popup = CTkToplevel(self)
         popup.title("Seleccionar Fecha")
         popup.geometry("300x300")
@@ -1764,20 +1798,23 @@ Deseas abrir la consola de Google Cloud ahora?"""
         CTkLabel(popup, text="Selecciona la fecha:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=10)
         
-        # Parsear fecha actual
+        # Parsear fecha ACTUALMENTE SELECCIONADA (no la de hoy)
         from datetime import datetime
         try:
-            fecha_actual = datetime.strptime(self.fecha_clase_var.get(), "%d/%m/%Y")
+            fecha_str = self.fecha_clase_var.get()
+            fecha_actual = datetime.strptime(fecha_str, "%d/%m/%Y")
             year, month, day = fecha_actual.year, fecha_actual.month, fecha_actual.day
         except:
-            year, month, day = date.today().year, date.today().month, date.today().day
+            # Si hay error, usar hoy
+            hoy = date.today()
+            year, month, day = hoy.year, hoy.month, hoy.day
         
         # Calendario compacto
         cal = Calendar(popup, selectmode='day', 
-                      year=year, month=month, day=day,
-                      locale='es_ES', font="Arial 9",
-                      background='blue', foreground='white',
-                      selectbackground='red', selectforeground='yellow')
+                    year=year, month=month, day=day,
+                    locale='es_ES', font="Arial 9",
+                    background='blue', foreground='white',
+                    selectbackground='red', selectforeground='yellow')
         cal.pack(pady=10)
         
         def seleccionar():
@@ -1786,43 +1823,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
             popup.destroy()
         
         CTkButton(popup, text="Seleccionar", command=seleccionar,
-                 fg_color="green", height=35).pack(pady=10)
-    
-    def fecha_clase_hoy(self):
-        """Pone la fecha de hoy"""
-        hoy = date.today().strftime("%d/%m/%Y")
-        self.fecha_clase_var.set(hoy)
-        self.btn_fecha_clase.configure(text=hoy)
-
-    def on_cambio_grupo_clase(self, grupo):
-        """Cuando cambia el grupo seleccionado, recargar las clases de ese grupo"""
-        self.lbl_info_grupo_clase.configure(text=f"Clases para Grupo {grupo}")
-        self.cargar_lista_clases()  # Recargar lista filtrada por grupo
-    
-    def get_grupo_clase_actual(self):
-        """Obtiene el grupo seleccionado actualmente como int"""
-        try:
-            return int(self.grupo_clase_var.get())
-        except:
-            return 1
-
-    def eliminar_clase_guardada(self):
-        seleccion = self.combo_clases_guardadas.get()
-        if seleccion == "-- Nueva Clase --":
-            messagebox.showwarning("Advertencia", "Selecciona una clase para eliminar")
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Eliminar '{seleccion}'?"):
-            clase_id = self.clases_dict.get(seleccion)
-            if clase_id:
-                success, error = self.db.eliminar_clase(clase_id)
-                if success:
-                    self.cargar_lista_clases()
-                    self.limpiar_campos_clase()
-                    self.clase_actual_id = None
-                    messagebox.showinfo("Éxito", "Clase eliminada")
-                else:
-                    messagebox.showerror("Error", f"No se pudo eliminar: {error}")
+                fg_color="green", height=35).pack(pady=10)
 
 
     def abrir_asistencia(self):
@@ -1852,13 +1853,14 @@ Deseas abrir la consola de Google Cloud ahora?"""
         # ========== PANEL IZQUIERDO: Calendario y controles ==========
         left_frame = CTkFrame(dialog)
         left_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        left_frame.grid_rowconfigure(5, weight=1)  # Espacio expandible
+        left_frame.grid_rowconfigure(5, weight=1)
         
         CTkLabel(left_frame, text="Control de Asistencia", 
                 font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
         
         CTkLabel(left_frame, text="Seleccionar Fecha:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5))
+        
         # ========== SELECTOR DE GRUPO ==========
         grupo_frame = CTkFrame(left_frame, fg_color="transparent")
         grupo_frame.pack(pady=10, fill="x", padx=10)
@@ -1866,30 +1868,41 @@ Deseas abrir la consola de Google Cloud ahora?"""
         CTkLabel(grupo_frame, text="Grupo:", 
                 font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
         
-        self.grupo_asistencia_var = ctk.StringVar(value="1")
+        # Usar el mismo grupo que está en Control de Clases
+        self.grupo_asistencia_var = ctk.StringVar(value=self.grupo_clase_var.get())
+        
         combo_grupo_asistencia = CTkOptionMenu(grupo_frame, 
-                                              values=["1", "2", "3", "4", "5"],
-                                              variable=self.grupo_asistencia_var,
-                                              width=80,
-                                              command=lambda x: self.cargar_estudiantes_asistencia(cal.get_date()))
+                                            values=["1", "2", "3", "4", "5"],
+                                            variable=self.grupo_asistencia_var,
+                                            width=80,
+                                            command=lambda x: [self.cargar_estudiantes_asistencia(cal.get_date()), self.guardar_asistencia_auto()])
         combo_grupo_asistencia.pack(side="left", padx=5)
         
         CTkFrame(left_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=5)
         
-        # Calendario visual
+        # Calendario visual - USAR FECHA DE CONTROL DE CLASES
         cal_frame = CTkFrame(left_frame)
         cal_frame.pack(pady=5, padx=10)
         
-        cal = Calendar(cal_frame, selectmode='day', year=date.today().year, 
-                      month=date.today().month, day=date.today().day,
-                      locale='es_ES', font="Arial 10", 
-                      background='blue', foreground='white',
-                      selectbackground='red', selectforeground='yellow')
+        # Parsear la fecha que está en Control de Clases
+        from datetime import datetime
+        try:
+            fecha_inicial = datetime.strptime(self.fecha_clase_var.get(), "%d/%m/%Y")
+            year, month, day = fecha_inicial.year, fecha_inicial.month, fecha_inicial.day
+        except:
+            hoy = date.today()
+            year, month, day = hoy.year, hoy.month, hoy.day
+        
+        cal = Calendar(cal_frame, selectmode='day', 
+                    year=year, month=month, day=day,
+                    locale='es_ES', font="Arial 10", 
+                    background='blue', foreground='white',
+                    selectbackground='red', selectforeground='yellow')
         cal.pack(pady=5)
         
         # Mostrar fecha seleccionada
         fecha_label = CTkLabel(left_frame, text=f"Fecha: {cal.get_date()}", 
-                              font=ctk.CTkFont(size=14, weight="bold"))
+                            font=ctk.CTkFont(size=14, weight="bold"))
         fecha_label.pack(pady=10)
         
         # Botones de acción rápida
@@ -1897,24 +1910,24 @@ Deseas abrir la consola de Google Cloud ahora?"""
         btn_frame.pack(pady=10, fill="x", padx=10)
         
         CTkButton(btn_frame, text="✓ Todos Presentes", 
-                 command=lambda: self.marcar_todos_asistencia("presente"),
-                 fg_color="green", height=35).pack(pady=2, fill="x")
+                command=lambda: [self.marcar_todos_asistencia("presente"), self.guardar_asistencia_auto()],
+                fg_color="green", height=35).pack(pady=2, fill="x")
         CTkButton(btn_frame, text="✗ Todos Ausentes", 
-                 command=lambda: self.marcar_todos_asistencia("ausente"),
-                 fg_color="red", height=35).pack(pady=2, fill="x")
+                command=lambda: [self.marcar_todos_asistencia("ausente"), self.guardar_asistencia_auto()],
+                fg_color="red", height=35).pack(pady=2, fill="x")
         CTkButton(btn_frame, text="Limpiar Todo", 
-                 command=lambda: self.marcar_todos_asistencia("sin_marcar"),
-                 fg_color="gray", height=35).pack(pady=2, fill="x")
+                command=lambda: [self.marcar_todos_asistencia("sin_marcar"), self.guardar_asistencia_auto()],
+                fg_color="gray", height=35).pack(pady=2, fill="x")
         
-        # Botón guardar destacado
-        CTkButton(left_frame, text="💾 GUARDAR ASISTENCIA", 
-                 command=lambda: self.guardar_asistencia_db(cal.get_date(), dialog),
-                 fg_color="blue", height=50, 
-                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20, fill="x", padx=10)
+        # Botón cerrar (el guardado es automático)
+        CTkButton(left_frame, text="💾 Cerrar (Guardado automático)", 
+                command=lambda: [self.guardar_asistencia_auto(), dialog.destroy()],
+                fg_color="blue", height=50, 
+                font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20, fill="x", padx=10)
         
         # Estadísticas del día
         self.stats_label = CTkLabel(left_frame, text="Estadísticas: -", 
-                                   font=ctk.CTkFont(size=12))
+                                font=ctk.CTkFont(size=12))
         self.stats_label.pack(pady=10)
         
         # ========== PANEL DERECHO: Lista de estudiantes ==========
@@ -1925,38 +1938,57 @@ Deseas abrir la consola de Google Cloud ahora?"""
         CTkLabel(right_frame, text="👥 Lista de Estudiantes", 
                 font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
         
-        # Label de instrucción
-        CTkLabel(right_frame, text="Haz clic en Presente/Ausente para cada estudiante", 
+        CTkLabel(right_frame, text="Haz clic en el estado para cambiar (se guarda automáticamente)", 
                 font=ctk.CTkFont(size=11), text_color="gray").pack()
         
-        # Scrollable frame para estudiantes - ALTURA GRANDE
+        # Scrollable frame para estudiantes
         self.asistencia_scroll = CTkScrollableFrame(right_frame, 
-                                                   label_text="Marcar asistencia",
-                                                   height=550)
+                                                label_text="Marcar asistencia",
+                                                height=550)
         self.asistencia_scroll.pack(fill="both", expand=True, padx=10, pady=5)
         
         # Diccionario para almacenar las variables de estado
         self.checkboxes_asistencia = {}
         
-        # Cargar estudiantes del GRUPO SELECCIONADO inicialmente
+        # Variable para guardar referencia al calendario
+        self.cal_asistencia = cal
+        
+        # Cargar estudiantes inicialmente
         self.cargar_estudiantes_asistencia(cal.get_date())
         
         # Actualizar al cambiar fecha en calendario
         def on_fecha_change(event=None):
+            # Guardar asistencia anterior antes de cambiar
+            self.guardar_asistencia_auto()
+            # Cargar nueva fecha
             self.cargar_estudiantes_asistencia(cal.get_date())
             fecha_label.configure(text=f"Fecha: {cal.get_date()}")
+            # Sincronizar con Control de Clases
+            self.fecha_clase_var.set(cal.get_date())
+            self.btn_fecha_clase.configure(text=cal.get_date())
         
         cal.bind("<<CalendarSelected>>", on_fecha_change)
+        
+        # Guardar al cerrar la ventana
+        def on_closing():
+            self.guardar_asistencia_auto()
+            dialog.destroy()
+        
+        dialog.protocol("WM_DELETE_WINDOW", on_closing)
 
     def cargar_estudiantes_asistencia(self, fecha_str):
-        """Carga la lista de estudiantes con toggle simple: clic para cambiar Presente/Ausente"""
+        """Carga la lista de estudiantes con toggle simple, mostrando datos guardados"""
         # Limpiar frame anterior
         for widget in self.asistencia_scroll.winfo_children():
             widget.destroy()
         self.checkboxes_asistencia = {}
         
         # Obtener estudiantes del GRUPO seleccionado
-        grupo_asistencia = int(self.grupo_asistencia_var.get())
+        try:
+            grupo_asistencia = int(self.grupo_asistencia_var.get())
+        except:
+            grupo_asistencia = 1
+        
         estudiantes = self.db.get_estudiantes(self.current_curso, grupo=grupo_asistencia)
         
         if not estudiantes:
@@ -1965,7 +1997,7 @@ Deseas abrir la consola de Google Cloud ahora?"""
                     font=ctk.CTkFont(size=14)).pack(pady=20)
             return
         
-        # Cargar asistencia previa del GRUPO especifico
+        # Cargar asistencia previa del GRUPO y FECHA específicos
         asistencia_previa = self.db.get_asistencia_fecha(self.current_curso, grupo_asistencia, fecha_str)
         
         # Header de columnas
@@ -1976,21 +2008,23 @@ Deseas abrir la consola de Google Cloud ahora?"""
         
         CTkFrame(self.asistencia_scroll, height=2, fg_color="gray").pack(fill="x", padx=5, pady=2)
         
-        # Funcion para actualizar estadisticas
+        # Función para actualizar estadísticas
         def actualizar_stats():
             presentes = sum(1 for d in self.checkboxes_asistencia.values() if d['estado'] == "presente")
             ausentes = sum(1 for d in self.checkboxes_asistencia.values() if d['estado'] == "ausente")
             total = len(self.checkboxes_asistencia)
             
-            self.stats_label.configure(
-                text=f"Presentes: {presentes}\nAusentes: {ausentes}\nTotal: {total}"
-            )
+            if hasattr(self, 'stats_label'):
+                self.stats_label.configure(
+                    text=f"Presentes: {presentes} | Ausentes: {ausentes} | Total: {total}"
+                )
         
         self.actualizar_stats_asistencia = actualizar_stats
         
         # Crear fila para cada estudiante
         for est in estudiantes:
             est_id, nombre, grupo, email, carne = est
+            est_id_str = str(est_id)
             
             # Frame para cada estudiante
             row = CTkFrame(self.asistencia_scroll)
@@ -2004,22 +2038,21 @@ Deseas abrir la consola de Google Cloud ahora?"""
             lbl_nombre = CTkLabel(row, text=nombre_text, font=ctk.CTkFont(size=12), width=300)
             lbl_nombre.pack(side="left", padx=5)
             
-            # Botón toggle que cambia entre Ausente y Presente
-            # Por defecto: AUSENTE (a menos que ya esté guardado como presente)
-            estado_inicial = asistencia_previa.get(est_id, "ausente")  # Default: ausente
+            # Botón toggle - USA DATOS GUARDADOS si existen
+            estado_inicial = asistencia_previa.get(est_id_str, "sin_marcar")
             
-            btn_toggle = CTkButton(row, text="AUSENTE", width=120, height=32,
-                                  font=ctk.CTkFont(size=12, weight="bold"))
+            btn_toggle = CTkButton(row, text="SIN MARCAR", width=120, height=32,
+                                font=ctk.CTkFont(size=12, weight="bold"))
             btn_toggle.pack(side="right", padx=10)
             
             # Guardar referencia
-            self.checkboxes_asistencia[est_id] = {
+            self.checkboxes_asistencia[est_id_str] = {
                 'estado': estado_inicial,
                 'boton': btn_toggle
             }
             
-            # Funcion para actualizar apariencia del boton
-            def actualizar_boton(eid=est_id):
+            # Función para actualizar apariencia del botón
+            def actualizar_boton(eid=est_id_str):
                 datos = self.checkboxes_asistencia[eid]
                 estado = datos['estado']
                 boton = datos['boton']
@@ -2030,31 +2063,41 @@ Deseas abrir la consola de Google Cloud ahora?"""
                         fg_color="green",
                         hover_color="darkgreen"
                     )
-                else:
+                elif estado == "ausente":
                     boton.configure(
                         text="AUSENTE ✗",
                         fg_color="red",
                         hover_color="darkred"
                     )
-                actualizar_stats()
-            
-            # Funcion para toggle
-            def toggle_estado(eid=est_id):
-                datos = self.checkboxes_asistencia[eid]
-                # Cambiar estado
-                if datos['estado'] == "ausente":
-                    datos['estado'] = "presente"
                 else:
+                    boton.configure(
+                        text="SIN MARCAR",
+                        fg_color="gray",
+                        hover_color="darkgray"
+                    )
+                actualizar_stats()
+                # Guardar automáticamente al cambiar
+                self.guardar_asistencia_auto()
+            
+            # Función para toggle
+            def toggle_estado(eid=est_id_str):
+                datos = self.checkboxes_asistencia[eid]
+                # Ciclo: sin_marcar -> presente -> ausente -> sin_marcar
+                if datos['estado'] == "sin_marcar":
+                    datos['estado'] = "presente"
+                elif datos['estado'] == "presente":
                     datos['estado'] = "ausente"
+                else:
+                    datos['estado'] = "sin_marcar"
                 actualizar_boton(eid)
             
             # Configurar comando
-            btn_toggle.configure(command=lambda eid=est_id: toggle_estado(eid))
+            btn_toggle.configure(command=lambda eid=est_id_str: toggle_estado(eid))
             
             # Aplicar estado inicial visual
-            actualizar_boton(est_id)
+            actualizar_boton(est_id_str)
         
-        # Actualizar estadisticas iniciales
+        # Actualizar estadísticas iniciales
         actualizar_stats()
 
     def marcar_todos_asistencia(self, estado):
@@ -2064,23 +2107,32 @@ Deseas abrir la consola de Google Cloud ahora?"""
         
         for est_id, datos in self.checkboxes_asistencia.items():
             datos['estado'] = estado
-            # Actualizar boton
+            # Actualizar botón
             if estado == "presente":
                 datos['boton'].configure(
                     text="PRESENTE ✓",
                     fg_color="green",
                     hover_color="darkgreen"
                 )
-            else:
+            elif estado == "ausente":
                 datos['boton'].configure(
                     text="AUSENTE ✗",
                     fg_color="red",
                     hover_color="darkred"
                 )
+            else:
+                datos['boton'].configure(
+                    text="SIN MARCAR",
+                    fg_color="gray",
+                    hover_color="darkgray"
+                )
         
-        # Actualizar estadisticas
+        # Actualizar estadísticas
         if hasattr(self, 'actualizar_stats_asistencia'):
             self.actualizar_stats_asistencia()
+        
+        # Guardar automáticamente
+        self.guardar_asistencia_auto()
 
     def guardar_asistencia_db(self, fecha_str, dialog):
         """Guarda el registro de asistencia en la base de datos"""
@@ -2123,693 +2175,50 @@ Deseas abrir la consola de Google Cloud ahora?"""
         else:
             messagebox.showerror("Error", f"No se pudo guardar la asistencia:\n{error}")
 
-    def mover_estudiante_grupo_dialog(self, estudiante, grupo_origen, grupo_destino):
-        """Mueve un estudiante de un grupo a otro en el diálogo"""
-        if estudiante in self.estudiantes_grupos[grupo_origen]:
-            self.estudiantes_grupos[grupo_origen].remove(estudiante)
-            self.estudiantes_grupos[grupo_destino].append(estudiante)
-            self.mostrar_grupos_en_dialogo()
-
-    def quitar_de_grupo_dialog(self, estudiante, grupo):
-        """Quita un estudiante de un grupo (lo deja sin asignar)"""
-        if estudiante in self.estudiantes_grupos[grupo]:
-            self.estudiantes_grupos[grupo].remove(estudiante)
-            # Crear grupo especial "-1" para no asignados si no existe
-            if -1 not in self.estudiantes_grupos:
-                self.estudiantes_grupos[-1] = []
-            self.estudiantes_grupos[-1].append(estudiante)
-            self.mostrar_grupos_en_dialogo()
-
-    def cargar_grupos_previos_dialog(self):
-        """Carga grupos previos si existen para el diálogo"""
-        import json
-        import os
-        
-        archivo = os.path.join(DATA_DIR, f"grupos_{self.current_curso}.json")
-        if os.path.exists(archivo):
-            try:
-                with open(archivo, 'r', encoding='utf-8') as f:
-                    datos = json.load(f)
-                
-                # Reconstruir grupos desde IDs
-                todos_estudiantes = {e[0]: e for e in self.db.get_estudiantes(self.current_curso)}
-                
-                self.estudiantes_grupos = {}
-                for nombre_grupo, ids in datos.get("grupos", {}).items():
-                    num = int(nombre_grupo.split("_")[1]) - 1
-                    self.estudiantes_grupos[num] = [todos_estudiantes[eid] for eid in ids if eid in todos_estudiantes]
-                
-                self.num_grupos_var.set(str(len([k for k in self.estudiantes_grupos.keys() if k >= 0])))
-                
-                # Actualizar fecha si existe en los datos
-                if "fecha_creacion" in datos:
-                    from datetime import datetime
-                    try:
-                        fecha_dt = datetime.fromisoformat(datos["fecha_creacion"])
-                        self.fecha_grupos_var.set(fecha_dt.strftime("%d/%m/%Y"))
-                    except:
-                        pass
-                
-                self.mostrar_grupos_en_dialogo()
-                
-            except Exception as e:
-                print(f"Error cargando grupos previos: {e}")
-                self.estudiantes_grupos = {}
-                CTkLabel(self.grupos_frame_container, 
-                        text="No hay grupos previos. Presiona 'GENERAR GRUPOS AHORA'.").pack(pady=50)
-        else:
-            self.estudiantes_grupos = {}
-            CTkLabel(self.grupos_frame_container, 
-                    text="Presiona 'GENERAR GRUPOS AHORA' para crear los grupos").pack(pady=50)
-
-    def mostrar_grupos_en_dialogo(self):
-        """Muestra los grupos generados en el diálogo"""
-        # Limpiar frame anterior
-        for widget in self.grupos_frame_container.winfo_children():
-            widget.destroy()
-        self.grupos_containers = {}
-        
-        if not self.estudiantes_grupos:
-            CTkLabel(self.grupos_frame_container, 
-                    text="Presiona 'GENERAR GRUPOS AHORA' para crear los grupos",
-                    font=ctk.CTkFont(size=14)).pack(pady=50)
+    def guardar_asistencia_auto(self):
+        """Guarda la asistencia actual automáticamente sin mostrar mensajes"""
+        if not hasattr(self, 'checkboxes_asistencia') or not self.checkboxes_asistencia:
             return
         
-        # Frame contenedor principal usando pack (más estable que grid en scrollable frames)
-        container = CTkFrame(self.grupos_frame_container, fg_color="transparent")
-        container.pack(fill="both", expand=True)
-        
-        # Crear filas de grupos (3 por fila)
-        num_grupos = len([k for k in self.estudiantes_grupos.keys() if k >= 0])
-        
-        if num_grupos == 0:
-            CTkLabel(self.grupos_frame_container, 
-                    text="No hay grupos para mostrar").pack(pady=50)
-            return
-        
-        # Crear frames para cada fila
-        filas = []
-        grupos_por_fila = 3
-        num_filas = (num_grupos + grupos_por_fila - 1) // grupos_por_fila  # Redondeo hacia arriba
-        
-        for f in range(num_filas):
-            fila_frame = CTkFrame(container, fg_color="transparent")
-            fila_frame.pack(fill="x", pady=10)
-            filas.append(fila_frame)
-        
-        # Distribuir grupos en filas
-        grupo_idx = 0
-        for idx in sorted(self.estudiantes_grupos.keys()):
-            if idx < 0:  # Ignorar grupo -1 (no asignados)
-                continue
-            
-            fila_num = grupo_idx // grupos_por_fila
-            fila_frame = filas[fila_num]
-            
-            # Frame del grupo
-            grupo_frame = CTkFrame(fila_frame, border_width=3, border_color="blue", width=300)
-            grupo_frame.pack(side="left", padx=10, fill="y", expand=True)
-            grupo_frame.pack_propagate(False)
-            
-            # Header del grupo
-            header = CTkFrame(grupo_frame, fg_color="blue", height=40)
-            header.pack(fill="x", padx=3, pady=3)
-            header.pack_propagate(False)
-            
-            CTkLabel(header, text=f"GRUPO {idx + 1}", 
-                    font=ctk.CTkFont(size=18, weight="bold"),
-                    text_color="white").pack(expand=True)
-            
-            # Contador
-            CTkLabel(grupo_frame, 
-                    text=f"{len(self.estudiantes_grupos[idx])} estudiantes", 
-                    font=ctk.CTkFont(size=12),
-                    text_color="gray").pack(pady=5)
-            
-            # Separador
-            CTkFrame(grupo_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=2)
-            
-            # Frame scrollable para estudiantes
-            est_frame = CTkScrollableFrame(grupo_frame, width=270, height=280)
-            est_frame.pack(fill="both", expand=True, padx=5, pady=5)
-            
-            self.grupos_containers[idx] = est_frame
-            
-            # Mostrar cada estudiante
-            for est in self.estudiantes_grupos[idx]:
-                est_id, nombre, grupo_num, email, carne = est
-                
-                # Frame de la fila
-                est_row = CTkFrame(est_frame, fg_color="transparent")
-                est_row.pack(fill="x", pady=2, padx=2)
-                
-                # Nombre del estudiante
-                display_name = nombre
-                if carne:
-                    display_name += f"  ({carne})"
-                
-                lbl = CTkLabel(est_row, 
-                              text=display_name, 
-                              font=ctk.CTkFont(size=12),
-                              anchor="w")
-                lbl.pack(side="left", padx=5, fill="x", expand=True)
-                
-                # Frame de botones de movimiento
-                btn_frame = CTkFrame(est_row, fg_color="transparent")
-                btn_frame.pack(side="right")
-                
-                # Botón mover izquierda
-                if idx > 0:
-                    CTkButton(btn_frame, text="◀", width=28, height=28,
-                             command=lambda e=est, g=idx: self.mover_estudiante_grupo_dialog(e, g, g-1),
-                             fg_color="gray", hover_color="darkgray",
-                             font=ctk.CTkFont(size=10)).pack(side="left", padx=1)
-                
-                # Botón mover derecha
-                if idx < num_grupos - 1:
-                    CTkButton(btn_frame, text="▶", width=28, height=28,
-                             command=lambda e=est, g=idx: self.mover_estudiante_grupo_dialog(e, g, g+1),
-                             fg_color="gray", hover_color="darkgray",
-                             font=ctk.CTkFont(size=10)).pack(side="left", padx=1)
-                
-                # Botón quitar
-                CTkButton(btn_frame, text="✕", width=28, height=28,
-                         command=lambda e=est, g=idx: self.quitar_de_grupo_dialog(e, g),
-                         fg_color="red", hover_color="darkred",
-                         font=ctk.CTkFont(size=10)).pack(side="left", padx=1)
-            
-            grupo_idx += 1
-        
-        # Mostrar sección de "No asignados" si existe
-        if -1 in self.estudiantes_grupos and self.estudiantes_grupos[-1]:
-            no_asig_frame = CTkFrame(container, border_width=2, border_color="orange", fg_color="#2b2b2b")
-            no_asig_frame.pack(fill="x", padx=10, pady=10)
-            
-            CTkLabel(no_asig_frame, text="📋 Estudiantes sin asignar", 
-                    font=ctk.CTkFont(size=14, weight="bold"),
-                    text_color="orange").pack(pady=5)
-            
-            for est in self.estudiantes_grupos[-1]:
-                est_id, nombre, grupo_num, email, carne = est
-                
-                est_row = CTkFrame(no_asig_frame, fg_color="transparent")
-                est_row.pack(fill="x", pady=1, padx=10)
-                
-                display_name = f"• {nombre}"
-                if carne:
-                    display_name += f" ({carne})"
-                
-                CTkLabel(est_row, text=display_name, 
-                        font=ctk.CTkFont(size=11)).pack(side="left", padx=5)
-                
-                # Botón para mover al grupo 1
-                CTkButton(est_row, text="→ Mover a G1", width=100,
-                         command=lambda e=est: self.mover_estudiante_grupo_dialog(e, -1, 0),
-                         fg_color="green", hover_color="darkgreen",
-                         height=25).pack(side="right", padx=5)
-                
-    def generar_grupos_aleatorios_dialog(self, dialog=None):
-        """Genera grupos aleatorios de estudiantes - versión para el diálogo"""
-        from random import shuffle
-        
-        try:
-            num_grupos = int(self.num_grupos_var.get())
-            if num_grupos < 2:
-                messagebox.showwarning("Advertencia", "Debe haber al menos 2 grupos")
-                return
-        except ValueError:
-            messagebox.showerror("Error", "Ingresa un número válido de grupos")
-            return
-        
-        # Actualizar estado
-        if hasattr(self, 'status_generador_label'):
-            self.status_generador_label.configure(text="Cargando estudiantes...", text_color="blue")
-            dialog.update()
-        
-        # Obtener estudiantes según el filtro seleccionado
-        fecha_str = self.fecha_grupos_var.get()
-        
-        if self.usar_presentes_var.get():
-            # Solo presentes de la fecha seleccionada
-            todos_estudiantes = self.db.get_estudiantes(self.current_curso)
-            if not todos_estudiantes:
-                messagebox.showwarning("Advertencia", "No hay estudiantes en este curso")
-                return
-            
-            # Obtener asistencia de la fecha seleccionada para TODOS los grupos
-            asistencia = {}
-            for grupo_num in range(1, 6):  # Revisar grupos 1-5
-                asist_grupo = self.db.get_asistencia_fecha(self.current_curso, grupo_num, fecha_str)
-                asistencia.update(asist_grupo)
-            
-            # Filtrar solo los presentes
-            presentes_ids = [int(k) for k, v in asistencia.items() if v == "presente"]
-            estudiantes = [e for e in todos_estudiantes if e[0] in presentes_ids]
-            
-            if not estudiantes:
-                messagebox.showwarning("Advertencia", 
-                    f"No hay estudiantes marcados como PRESENTES el {fecha_str}\n\n"
-                    f"Ve a 'Control de Clases' → 'Registrar Asistencia' y marca quiénes asistieron.")
-                if hasattr(self, 'status_generador_label'):
-                    self.status_generador_label.configure(text="Error: No hay presentes", text_color="red")
-                return
-            
-            if hasattr(self, 'status_generador_label'):
-                self.status_generador_label.configure(
-                    text=f"✓ {len(estudiantes)} estudiantes presentes encontrados", 
-                    text_color="green")
-        else:
-            # Todos los estudiantes
-            estudiantes = self.db.get_estudiantes(self.current_curso)
-            if not estudiantes:
-                messagebox.showwarning("Advertencia", "No hay estudiantes en este curso")
-                return
-            
-            if hasattr(self, 'status_generador_label'):
-                self.status_generador_label.configure(
-                    text=f"✓ {len(estudiantes)} estudiantes en total", 
-                    text_color="green")
-        
-        # Mezclar aleatoriamente
-        lista_estudiantes = list(estudiantes)
-        shuffle(lista_estudiantes)
-        
-        # Distribuir en grupos
-        self.estudiantes_grupos = {i: [] for i in range(num_grupos)}
-        for i, est in enumerate(lista_estudiantes):
-            grupo_num = i % num_grupos
-            self.estudiantes_grupos[grupo_num].append(est)
-        
-        # Mostrar grupos
-        self.mostrar_grupos_en_dialogo()
-
-    def abrir_generador_grupos(self):
-        """Abre el generador de grupos aleatorios"""
         if not self.current_curso:
-            messagebox.showwarning("Advertencia", "Selecciona un curso primero")
             return
         
-        from random import shuffle
-        import json
+        # Recopilar datos
+        asistencia_data = {}
+        for est_id, datos in self.checkboxes_asistencia.items():
+            estado = datos['estado']
+            if estado in ["presente", "ausente"]:  # Solo guardar si está marcado
+                asistencia_data[est_id] = estado
         
-        # Crear ventana
-        dialog = ctk.CTkToplevel(self)
-        dialog.title("Generador de Grupos Aleatorios")
-        dialog.geometry("1000x800")
-        dialog.transient(self)
-        dialog.grab_set()
+        if not asistencia_data:
+            return
         
-        # Centrar ventana
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (500)
-        y = (dialog.winfo_screenheight() // 2) - (400)
-        dialog.geometry(f"1000x800+{x}+{y}")
-        
-        # Frame principal
-        main_frame = CTkFrame(dialog)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # ========== PANEL SUPERIOR: Controles ==========
-        control_frame = CTkFrame(main_frame)
-        control_frame.pack(fill="x", pady=10, padx=10)
-        
-        # Fila 1: Cantidad de grupos
-        row1 = CTkFrame(control_frame, fg_color="transparent")
-        row1.pack(fill="x", pady=5)
-        
-        CTkLabel(row1, text="Cantidad de grupos:", 
-                font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
-        
-        self.num_grupos_var = ctk.StringVar(value="3")
-        entry_num = CTkEntry(row1, textvariable=self.num_grupos_var, width=60)
-        entry_num.pack(side="left", padx=5)
-        
-        # Fila 2: Fecha y opción de presentes
-        row2 = CTkFrame(control_frame, fg_color="transparent")
-        row2.pack(fill="x", pady=5)
-        
-        CTkLabel(row2, text="Fecha de clase:", 
-                font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
-        
-        self.fecha_grupos_var = ctk.StringVar(value=date.today().strftime("%d/%m/%Y"))
-        
-        # Botón para seleccionar fecha
-        def seleccionar_fecha_grupos():
-            popup = CTkToplevel(dialog)
-            popup.title("Seleccionar Fecha")
-            popup.geometry("300x320")
-            popup.transient(dialog)
-            popup.grab_set()
-            
-            popup.update_idletasks()
-            px = (popup.winfo_screenwidth() // 2) - (150)
-            py = (popup.winfo_screenheight() // 2) - (160)
-            popup.geometry(f"300x320+{px}+{py}")
-            
-            CTkLabel(popup, text="Selecciona la fecha:", 
-                    font=ctk.CTkFont(weight="bold")).pack(pady=10)
-            
-            from datetime import datetime
-            try:
-                fecha_actual = datetime.strptime(self.fecha_grupos_var.get(), "%d/%m/%Y")
-                year, month, day = fecha_actual.year, fecha_actual.month, fecha_actual.day
-            except:
-                year, month, day = date.today().year, date.today().month, date.today().day
-            
-            cal = Calendar(popup, selectmode='day', 
-                          year=year, month=month, day=day,
-                          locale='es_ES', font="Arial 10",
-                          background='blue', foreground='white',
-                          selectbackground='red', selectforeground='yellow')
-            cal.pack(pady=10)
-            
-            def confirmar():
-                self.fecha_grupos_var.set(cal.get_date())
-                btn_fecha.configure(text=self.fecha_grupos_var.get())
-                popup.destroy()
-            
-            CTkButton(popup, text="Seleccionar", command=confirmar,
-                     fg_color="green", height=35).pack(pady=10)
-        
-        btn_fecha = CTkButton(row2, text=self.fecha_grupos_var.get(),
-                             width=120, command=seleccionar_fecha_grupos,
-                             fg_color="blue", hover_color="darkblue")
-        btn_fecha.pack(side="left", padx=5)
-        
-        # Checkbox para usar solo presentes
-        self.usar_presentes_var = ctk.BooleanVar(value=True)
-        check_presentes = CTkCheckBox(row2, text="Solo estudiantes PRESENTES en esa fecha", 
-                                     variable=self.usar_presentes_var,
-                                     font=ctk.CTkFont(weight="bold"))
-        check_presentes.pack(side="left", padx=20)
-        
-        # Fila 3: Botón de generar (DESTACADO)
-        row3 = CTkFrame(control_frame, fg_color="transparent")
-        row3.pack(fill="x", pady=15)
-        
-        # Label de estado
-        self.status_generador_label = CTkLabel(row3, text="",
-                                              font=ctk.CTkFont(size=12))
-        self.status_generador_label.pack(side="left", padx=10)
-        
-        # BOTÓN PRINCIPAL DE GENERAR
-        def generar_callback():
-            self.generar_grupos_aleatorios_dialog(dialog)
-        
-        btn_generar = CTkButton(row3, text="🎲 GENERAR GRUPOS AHORA", 
-                               command=generar_callback,
-                               fg_color="green", 
-                               hover_color="darkgreen",
-                               height=50,
-                               font=ctk.CTkFont(size=16, weight="bold"))
-        btn_generar.pack(side="right", padx=10)
-        
-        # Botón guardar
-        btn_guardar = CTkButton(row3, text="💾 Guardar Grupos", 
-                               command=lambda: self.guardar_grupos(dialog),
-                               fg_color="blue", 
-                               height=50,
-                               font=ctk.CTkFont(size=14))
-        btn_guardar.pack(side="right", padx=10)
-        
-        # Separador
-        CTkFrame(main_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=5)
-        
-        # ========== PANEL DE RESULTADOS ==========
-        CTkLabel(main_frame, text="Grupos Generados:", 
-                font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
-        
-        # Frame scrollable para los grupos - USAR pack EN LUGAR DE grid
-        self.grupos_frame_container = CTkScrollableFrame(main_frame, 
-                                                        label_text="Los grupos aparecerán aquí",
-                                                        height=550)
-        self.grupos_frame_container.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Inicializar variables
-        self.grupos_containers = {}
-        self.estudiantes_grupos = {}
-        
-        # Mostrar mensaje inicial
-        CTkLabel(self.grupos_frame_container, 
-                text="Presiona 'GENERAR GRUPOS AHORA' para crear los grupos",
-                font=ctk.CTkFont(size=14)).pack(pady=50)
-
-    def generar_grupos_aleatorios(self):
-        """Genera grupos aleatorios de estudiantes"""
-        from random import shuffle
-        
+        # Obtener fecha y grupo
+        fecha_str = self.cal_asistencia.get_date() if hasattr(self, 'cal_asistencia') else self.fecha_clase_var.get()
         try:
-            num_grupos = int(self.num_grupos_var.get())
-            if num_grupos < 2:
-                messagebox.showwarning("Advertencia", "Debe haber al menos 2 grupos")
-                return
-        except ValueError:
-            messagebox.showerror("Error", "Ingresa un numero valido de grupos")
-            return
+            grupo_asistencia = int(self.grupo_asistencia_var.get())
+        except:
+            grupo_asistencia = 1
         
-        # Obtener estudiantes según el filtro seleccionado
-        if self.usar_presentes_var.get():
-            # Solo presentes de la fecha seleccionada
-            fecha_str = self.fecha_grupos_var.get()
+        # Guardar silenciosamente
+        try:
+            # Primero eliminar registros existentes
+            self.db.eliminar_asistencia_fecha(self.current_curso, grupo_asistencia, fecha_str)
+            # Luego guardar nuevos
+            self.db.guardar_asistencia(self.current_curso, grupo_asistencia, fecha_str, asistencia_data)
             
-            # Obtener todos los estudiantes del curso primero
-            todos_estudiantes = self.db.get_estudiantes(self.current_curso)
-            if not todos_estudiantes:
-                messagebox.showwarning("Advertencia", "No hay estudiantes en este curso")
-                return
+            # Actualizar estadísticas sin mostrar mensaje
+            stats = self.db.get_estadisticas_asistencia(self.current_curso, grupo_asistencia, fecha_str)
+            presentes = stats.get('presente', 0)
+            ausentes = stats.get('ausente', 0)
             
-            # Obtener asistencia de la fecha seleccionada para TODOS los grupos
-            asistencia = {}
-            for grupo_num in range(1, 6):  # Revisar grupos 1-5
-                asist_grupo = self.db.get_asistencia_fecha(self.current_curso, grupo_num, fecha_str)
-                asistencia.update(asist_grupo)
-            
-            # Filtrar solo los presentes
-            presentes_ids = [int(k) for k, v in asistencia.items() if v == "presente"]
-            estudiantes = [e for e in todos_estudiantes if e[0] in presentes_ids]
-            
-            if not estudiantes:
-                messagebox.showwarning("Advertencia", 
-                    f"No hay estudiantes presentes el {fecha_str}\n"
-                    f"Registra asistencia primero o desmarca 'Solo presentes'")
-                return
-        else:
-            # Todos los estudiantes
-            estudiantes = self.db.get_estudiantes(self.current_curso)
-            if not estudiantes:
-                messagebox.showwarning("Advertencia", "No hay estudiantes en este curso")
-                return
-        
-        # Mezclar aleatoriamente
-        lista_estudiantes = list(estudiantes)
-        shuffle(lista_estudiantes)
-        
-        # Distribuir en grupos
-        self.estudiantes_grupos = {i: [] for i in range(num_grupos)}
-        for i, est in enumerate(lista_estudiantes):
-            grupo_num = i % num_grupos
-            self.estudiantes_grupos[grupo_num].append(est)
-        
-        # Mostrar grupos
-        self.mostrar_grupos_en_pantalla()
+            if hasattr(self, 'stats_label'):
+                self.stats_label.configure(text=f"Presentes: {presentes} | Ausentes: {ausentes}")
+                
+        except Exception as e:
+            print(f"Error auto-guardando asistencia: {e}")
 
-    def mostrar_grupos_en_pantalla(self):
-        """Muestra los grupos generados en la interfaz con funcionalidad de mover"""
-        # Limpiar frame anterior
-        for widget in self.grupos_frame.winfo_children():
-            widget.destroy()
-        self.grupos_containers = {}
-        
-        if not self.estudiantes_grupos:
-            CTkLabel(self.grupos_frame, text="Genera grupos primero usando el botón 'Generar Grupos Aleatorios'").pack(pady=20)
-            return
-        
-        # Crear contenedor principal con grid
-        container = CTkFrame(self.grupos_frame, fg_color="transparent")
-        container.pack(fill="both", expand=True)
-        
-        # Calcular columnas (max 3 por fila)
-        num_grupos = len([k for k in self.estudiantes_grupos.keys() if k >= 0])
-        cols = 3 if num_grupos >= 3 else num_grupos
-        
-        # Configurar columnas del grid
-        for c in range(cols):
-            container.grid_columnconfigure(c, weight=1)
-        
-        grupo_idx = 0
-        for idx in sorted(self.estudiantes_grupos.keys()):
-            if idx < 0:  # Ignorar grupo -1 (no asignados)
-                continue
-                
-            row = grupo_idx // cols
-            col = grupo_idx % cols
-            
-            # Frame del grupo
-            grupo_frame = CTkFrame(container, border_width=2, border_color="blue", width=280)
-            grupo_frame.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
-            grupo_frame.grid_propagate(False)  # Mantener tamaño fijo
-            
-            # Header del grupo
-            header = CTkFrame(grupo_frame, fg_color="blue")
-            header.pack(fill="x", padx=2, pady=2)
-            
-            CTkLabel(header, text=f"GRUPO {idx + 1}", 
-                    font=ctk.CTkFont(size=16, weight="bold"),
-                    text_color="white").pack(pady=5)
-            
-            CTkLabel(grupo_frame, text=f"({len(self.estudiantes_grupos[idx])} estudiantes)", 
-                    font=ctk.CTkFont(size=10)).pack(pady=2)
-            
-            # Separador
-            CTkFrame(grupo_frame, height=2, fg_color="gray").pack(fill="x", padx=5, pady=2)
-            
-            # Frame scrollable para estudiantes de este grupo
-            est_frame = CTkScrollableFrame(grupo_frame, height=200, width=250)
-            est_frame.pack(fill="both", expand=True, padx=5, pady=5)
-            
-            self.grupos_containers[idx] = est_frame
-            
-            # Mostrar estudiantes con botones para mover
-            for est in self.estudiantes_grupos[idx]:
-                est_id, nombre, grupo_num, email, carne = est
-                
-                est_row = CTkFrame(est_frame, fg_color="transparent")
-                est_row.pack(fill="x", pady=1)
-                
-                # Nombre del estudiante (con carne si existe)
-                display_name = f"• {nombre}"
-                if carne:
-                    display_name += f" ({carne})"
-                
-                CTkLabel(est_row, text=display_name, 
-                        font=ctk.CTkFont(size=11)).pack(side="left", padx=2)
-                
-                # Botones para mover entre grupos
-                btn_frame = CTkFrame(est_row, fg_color="transparent")
-                btn_frame.pack(side="right")
-                
-                if idx > 0:  # Puede mover a grupo anterior
-                    CTkButton(btn_frame, text="←", width=25, height=25,
-                             command=lambda e=est, g=idx: self.mover_estudiante_grupo(e, g, g-1),
-                             fg_color="gray", hover_color="darkgray").pack(side="left", padx=1)
-                
-                if idx < num_grupos - 1:  # Puede mover a grupo siguiente
-                    CTkButton(btn_frame, text="→", width=25, height=25,
-                             command=lambda e=est, g=idx: self.mover_estudiante_grupo(e, g, g+1),
-                             fg_color="gray", hover_color="darkgray").pack(side="left", padx=1)
-                
-                # Botón para quitar del grupo
-                CTkButton(btn_frame, text="×", width=25, height=25,
-                         command=lambda e=est, g=idx: self.quitar_de_grupo(e, g),
-                         fg_color="red", hover_color="darkred").pack(side="left", padx=1)
-            
-            grupo_idx += 1
-        
-        # Mostrar grupo de "No asignados" si existe y tiene elementos
-        if -1 in self.estudiantes_grupos and self.estudiantes_grupos[-1]:
-            row = (grupo_idx // cols) + 1
-            
-            no_asig_frame = CTkFrame(container, border_width=2, border_color="gray", width=280)
-            no_asig_frame.grid(row=row, column=0, columnspan=cols, padx=10, pady=10, sticky="ew")
-            
-            CTkLabel(no_asig_frame, text="📋 Sin Asignar", 
-                    font=ctk.CTkFont(size=14, weight="bold"),
-                    text_color="gray").pack(pady=5)
-            
-            est_frame = CTkScrollableFrame(no_asig_frame, height=100, width=800)
-            est_frame.pack(fill="x", padx=5, pady=5)
-            
-            for est in self.estudiantes_grupos[-1]:
-                est_id, nombre, grupo_num, email, carne = est
-                
-                est_row = CTkFrame(est_frame, fg_color="transparent")
-                est_row.pack(fill="x", pady=1)
-                
-                display_name = f"• {nombre}"
-                if carne:
-                    display_name += f" ({carne})"
-                
-                CTkLabel(est_row, text=display_name, 
-                        font=ctk.CTkFont(size=11)).pack(side="left", padx=2)
-                
-                # Botón para reasignar al grupo 1
-                CTkButton(est_row, text="→ G1", width=50, height=25,
-                         command=lambda e=est: self.mover_estudiante_grupo(e, -1, 0),
-                         fg_color="green", hover_color="darkgreen").pack(side="right", padx=2)
-
-    def mover_estudiante_grupo(self, estudiante, grupo_origen, grupo_destino):
-        """Mueve un estudiante de un grupo a otro"""
-        if estudiante in self.estudiantes_grupos[grupo_origen]:
-            self.estudiantes_grupos[grupo_origen].remove(estudiante)
-            self.estudiantes_grupos[grupo_destino].append(estudiante)
-            self.mostrar_grupos_en_pantalla()
-
-    def quitar_de_grupo(self, estudiante, grupo):
-        """Quita un estudiante de un grupo (lo deja sin asignar)"""
-        if estudiante in self.estudiantes_grupos[grupo]:
-            self.estudiantes_grupos[grupo].remove(estudiante)
-            # Crear grupo especial "-1" para no asignados si no existe
-            if -1 not in self.estudiantes_grupos:
-                self.estudiantes_grupos[-1] = []
-            self.estudiantes_grupos[-1].append(estudiante)
-            self.mostrar_grupos_en_pantalla()
-
-    def guardar_grupos(self, dialog):
-        """Guarda la configuración de grupos"""
-        import json
-        from datetime import datetime
-        
-        if not self.estudiantes_grupos:
-            messagebox.showwarning("Advertencia", "No hay grupos para guardar")
-            return
-        
-        # Convertir a formato guardable (solo IDs)
-        grupos_guardar = {}
-        for num, estudiantes in self.estudiantes_grupos.items():
-            if num >= 0:  # Ignorar el grupo -1 (no asignados) al guardar
-                grupos_guardar[f"grupo_{num + 1}"] = [e[0] for e in estudiantes]
-        
-        datos = {
-            "fecha_creacion": datetime.now().isoformat(),
-            "fecha_clase": self.fecha_grupos_var.get(),
-            "curso_id": self.current_curso,
-            "num_grupos": len([k for k in self.estudiantes_grupos.keys() if k >= 0]),
-            "grupos": grupos_guardar
-        }
-        
-        # Guardar en JSON
-        archivo = os.path.join(DATA_DIR, f"grupos_{self.current_curso}.json")
-        with open(archivo, 'w', encoding='utf-8') as f:
-            json.dump(datos, f, ensure_ascii=False, indent=2)
-        
-        messagebox.showinfo("Éxito", f"Grupos guardados correctamente\n\nTotal: {len(grupos_guardar)} grupos")
-
-    def cargar_grupos_previos(self):
-        """Carga grupos previos si existen"""
-        import json
-        
-        archivo = os.path.join(DATA_DIR, f"grupos_{self.current_curso}.json")
-        if os.path.exists(archivo):
-            try:
-                with open(archivo, 'r', encoding='utf-8') as f:
-                    datos = json.load(f)
-                
-                # Reconstruir grupos desde IDs
-                todos_estudiantes = {e[0]: e for e in self.db.get_estudiantes(self.current_curso)}
-                
-                self.estudiantes_grupos = {}
-                for nombre_grupo, ids in datos.get("grupos", {}).items():
-                    num = int(nombre_grupo.split("_")[1]) - 1
-                    self.estudiantes_grupos[num] = [todos_estudiantes[eid] for eid in ids if eid in todos_estudiantes]
-                
-                self.num_grupos_var.set(str(len(self.estudiantes_grupos)))
-                self.mostrar_grupos_en_pantalla()
-                
-            except Exception as e:
-                print(f"Error cargando grupos previos: {e}")
-                self.estudiantes_grupos = {}
-
-
+   
     def exportar_clase_pdf(self):
         """Exporta la clase actual a PDF"""
         if not self.current_curso:
