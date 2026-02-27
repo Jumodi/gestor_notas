@@ -18,8 +18,17 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        # ========== TABLA DE CURSOS ==========
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cursos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL UNIQUE,
+                descripcion TEXT,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         
-        # Tabla de cursos
+        # Tabla de clases
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS clases (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,20 +106,8 @@ class DatabaseManager:
                 auto_sync BOOLEAN DEFAULT 0
             )
         ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS clases (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                curso_id INTEGER NOT NULL,
-                encabezado TEXT NOT NULL,
-                topicos TEXT,
-                contenido TEXT,
-                observaciones TEXT,
-                fecha_clase DATE,
-                fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (curso_id) REFERENCES cursos(id)
-            )
-        ''')
         
+       
         # Tabla de enlaces de clases
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS clase_links (
