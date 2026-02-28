@@ -3,7 +3,6 @@ from customtkinter import CTk, CTkFrame, CTkLabel, CTkButton, CTkOptionMenu, CTk
 import tkinter as tk
 from tkinter import messagebox, filedialog, simpledialog
 from database import DatabaseManager
-# NUEVO: Sistema de sincronizacion por archivo
 from sync_file import FileSyncManager
 import os
 import threading
@@ -13,10 +12,24 @@ import sys
 from tkcalendar import Calendar
 from datetime import datetime, date
 import json
-
-
+import statistics
 
 SISTEMA = platform.system()
+
+# Definición de colores del sistema
+COLORES = {
+    "primario": "#2C3E50",
+    "secundario": "#34495E",
+    "acento": "#3498DB",
+    "exito": "#27AE60",
+    "alerta": "#F39C12",
+    "peligro": "#E74C3C",
+    "fondo": "#ECF0F1",
+    "tarjeta": "#FFFFFF",
+    "texto": "#2C3E50",
+    "texto_secundario": "#7F8C8D",
+    "borde": "#BDC3C7"
+}
 
 def get_executable_dir():
     if getattr(sys, 'frozen', False):
@@ -30,9 +43,6 @@ def get_resource_path(relative_path):
     else:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
-
-#PRUEBA DE CÓDIGO 
-
 
 def get_data_path():
     if getattr(sys, 'frozen', False):
@@ -58,30 +68,36 @@ TOKEN_PATH = get_token_path()
 print(f"DEBUG: Buscando credentials en: {CREDENTIALS_PATH}")
 print(f"DEBUG: Existe?: {os.path.exists(CREDENTIALS_PATH)}")
 
-SISTEMA = platform.system()
-
 ctk.set_appearance_mode("System")
-ctk.set_default_color_theme("blue")
 
 class GestorNotasApp(CTk):
     def __init__(self):
         super().__init__()
+        
+        # Configuración tipográfica
+        self.FUENTES = {
+            "titulo": ctk.CTkFont(family="Helvetica", size=20, weight="bold"),
+            "subtitulo": ctk.CTkFont(family="Helvetica", size=16, weight="bold"),
+            "normal": ctk.CTkFont(family="Helvetica", size=12),
+            "pequeña": ctk.CTkFont(family="Helvetica", size=11),
+            "boton": ctk.CTkFont(family="Helvetica", size=12, weight="bold"),
+            "monospace": ctk.CTkFont(family="Consolas", size=11)
+        }
+        
         self.title("Gestor de Evaluaciones Universitarias")
         self.geometry("1400x900")
         self.minsize(1200, 700)
         self.db = DatabaseManager(DB_PATH)
-        # NUEVO: Sistema de sincronizacion por archivo compartido
         self.file_sync = FileSyncManager(DB_PATH)
         self.current_curso = None
         self.current_evaluacion = None
         self.entries_notas = {}
         self.auto_sync_enabled = False
         self.clase_actual_id = None
+        
         self.setup_ui()
         self.load_cursos()
-        # Verificar estado de sincronizacion al iniciar
         self.after(1000, self.verificar_sincronizacion_inicio)
-
 
     def sincronizar_manual(self):
         """Abre dialogo de sincronizacion por archivo compartido"""
@@ -91,7 +107,6 @@ class GestorNotasApp(CTk):
         dialog.transient(self)
         dialog.grab_set()
         
-        # Centrar
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - (500 // 2)
         y = (dialog.winfo_screenheight() // 2) - (600 // 2)
@@ -100,7 +115,6 @@ class GestorNotasApp(CTk):
         CTkLabel(dialog, text="Sincronizacion de Datos", 
                 font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 10))
         
-        # Estado actual
         estado, mensaje, info = self.file_sync.check_sync_status()
         
         frame_estado = CTkFrame(dialog)
@@ -119,7 +133,6 @@ class GestorNotasApp(CTk):
             CTkLabel(frame_estado, text=info_text, font=ctk.CTkFont(size=11), 
                     text_color="gray").pack(anchor="w", padx=10, pady=(0, 10))
         
-        # Carpeta configurada
         CTkLabel(dialog, text="Carpeta de sincronizacion:", 
                 font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=20, pady=(20, 5))
         
@@ -127,7 +140,6 @@ class GestorNotasApp(CTk):
         lbl_folder = CTkLabel(dialog, text=folder_text, font=ctk.CTkFont(size=11))
         lbl_folder.pack(anchor="w", padx=20)
         
-        # Botones principales
         btn_frame = CTkFrame(dialog, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=20)
         
@@ -155,13 +167,11 @@ class GestorNotasApp(CTk):
         CTkButton(btn_frame, text="Importar de carpeta (Descargar)", 
                  command=importar, fg_color="green", height=40).pack(fill="x", pady=5)
         
-        # Configuracion
         CTkFrame(dialog, height=2, fg_color="gray").pack(fill="x", padx=20, pady=20)
         
         CTkLabel(dialog, text="Configuracion", 
                 font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=20)
         
-        # Detectar carpetas comunes
         carpetas_default = self.file_sync.get_default_sync_paths()
         
         if carpetas_default:
@@ -186,7 +196,6 @@ class GestorNotasApp(CTk):
                 CTkButton(frame_servicio, text="Usar", width=60, 
                          command=usar_ruta).pack(side="right", padx=5)
         
-        # Seleccion manual
         def seleccionar_carpeta():
             folder = filedialog.askdirectory(title="Seleccionar carpeta de sincronizacion")
             if folder:
@@ -200,7 +209,6 @@ class GestorNotasApp(CTk):
         CTkButton(dialog, text="Seleccionar carpeta manualmente...", 
                  command=seleccionar_carpeta).pack(fill="x", padx=20, pady=10)
         
-        # Resolver conflicto (solo visible si hay conflicto)
         if estado == "conflicto":
             CTkFrame(dialog, height=2, fg_color="red").pack(fill="x", padx=20, pady=20)
             
@@ -263,7 +271,6 @@ class GestorNotasApp(CTk):
                 "Ve a Herramientas > Sincronizar para resolver el conflicto."
             )
         
-        # Actualizar status bar
         if estado == "sincronizado":
             self.status_label.configure(text="Sync: Sincronizado", text_color="green")
         elif estado == "no_config":
@@ -287,9 +294,13 @@ class GestorNotasApp(CTk):
 
     def seleccionar_curso(self, nombre_curso):
         for nombre, btn in self.curso_buttons.items():
-            btn.configure(fg_color="transparent", border_color="gray")
+            btn.configure(fg_color=COLORES["secundario"], 
+                         text_color="white")
         if nombre_curso in self.curso_buttons:
-            self.curso_buttons[nombre_curso].configure(fg_color="blue", border_color="blue")
+            self.curso_buttons[nombre_curso].configure(
+                fg_color=COLORES["acento"],
+                text_color="white"
+            )
         self.current_curso = self.cursos_data.get(nombre_curso)
         if self.current_curso:
             self.load_evaluaciones()
@@ -298,10 +309,9 @@ class GestorNotasApp(CTk):
             self.actualizar_resumen()
             self.cargar_lista_clases()  
             self.limpiar_campos_clase()  
-            self.clase_actual_id = None 
+            self.clase_actual_id = None
 
     def load_cursos(self):
-        # Limpiar scroll
         for widget in self.cursos_scroll.winfo_children():
             widget.destroy()
         
@@ -314,40 +324,33 @@ class GestorNotasApp(CTk):
                 curso_id, nombre, descripcion, total_est, total_eval = curso
                 self.cursos_data[nombre] = curso_id
                 
-                # Texto con info compacta
-                btn_text = f"{nombre}\n({total_est} est, {total_eval} eval)"
+                btn_frame = CTkFrame(self.cursos_scroll, 
+                                    fg_color="transparent")
+                btn_frame.pack(fill="x", pady=2)
                 
-                # Frame contenedor para mejor control
-                btn_frame = CTkFrame(self.cursos_scroll, fg_color="transparent")
-                btn_frame.pack(fill="x", pady=2, padx=5)
-                btn_frame.grid_columnconfigure(0, weight=1)
-                
-                # Botón con texto ajustado (wraplength)
                 btn = CTkButton(
                     btn_frame, 
-                    text=btn_text, 
+                    text=f"{nombre}\n{total_est} estudiantes · {total_eval} evaluaciones", 
                     command=lambda n=nombre: self.seleccionar_curso(n),
-                    fg_color="transparent",
-                    border_width=2,
-                    border_color="gray",
-                    hover_color="gray25",
+                    fg_color=COLORES["secundario"],
+                    border_width=0,
+                    hover_color=COLORES["acento"],
                     anchor="w",
-                    height=50,  
-                    corner_radius=8,
-                    font=ctk.CTkFont(size=11)  # Fuente ligeramente más pequeña
+                    height=50,
+                    corner_radius=6,
+                    font=self.FUENTES["pequeña"],
+                    text_color="white"
                 )
-                # Configurar wraplength para que el texto haga salto de línea
-                btn._text_label.configure(wraplength=280, justify="left")
-                # Forzar expansión horizontal
-                btn.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+                btn.pack(fill="x", padx=2, pady=2)
                 
                 self.curso_buttons[nombre] = btn
-                self.agregar_tooltip(btn, f"Curso: {nombre}\nDescripción: {descripcion or 'Sin descripción'}")
-            
-            # Seleccionar primero
+                
             self.seleccionar_curso(cursos[0][1])
         else:
-            CTkLabel(self.cursos_scroll, text="No hay cursos").pack(pady=10)
+            CTkLabel(self.cursos_scroll, 
+                    text="No hay cursos registrados",
+                    font=self.FUENTES["pequeña"],
+                    text_color=COLORES["texto_secundario"]).pack(pady=20)
             self.current_curso = None
 
     def editar_curso(self):
@@ -393,9 +396,13 @@ class GestorNotasApp(CTk):
 
     def seleccionar_evaluacion(self, nombre_eval):
         for nombre, btn in self.eval_buttons.items():
-            btn.configure(fg_color="transparent", border_color="gray")
+            btn.configure(fg_color=COLORES["secundario"],
+                         text_color="white")
         if nombre_eval in self.eval_buttons:
-            self.eval_buttons[nombre_eval].configure(fg_color="green", border_color="green")
+            self.eval_buttons[nombre_eval].configure(
+                fg_color=COLORES["exito"],
+                text_color="white"
+            )
         self.current_evaluacion = self.evals_data.get(nombre_eval)
         if self.current_evaluacion:
             self.load_estudiantes_notas()
@@ -406,7 +413,6 @@ class GestorNotasApp(CTk):
         if not self.current_curso:
             return
         
-        # Limpiar scroll
         for widget in self.evals_scroll.winfo_children():
             widget.destroy()
         
@@ -419,38 +425,33 @@ class GestorNotasApp(CTk):
                 eval_id, nombre, puntos_max, orden, fecha = eval
                 self.evals_data[nombre] = eval_id
                 
-                # Texto: nombre en línea 1, puntos en línea 2
-                btn_text = f"{nombre}\n(Máx: {puntos_max} pts)"
-                
-                # Frame contenedor
-                btn_frame = CTkFrame(self.evals_scroll, fg_color="transparent")
-                btn_frame.pack(fill="x", pady=2, padx=5)
-                btn_frame.grid_columnconfigure(0, weight=1)
+                btn_frame = CTkFrame(self.evals_scroll, 
+                                    fg_color="transparent")
+                btn_frame.pack(fill="x", pady=2)
                 
                 btn = CTkButton(
                     btn_frame,
-                    text=btn_text,
+                    text=f"{orden}. {nombre}\nMáximo: {puntos_max} puntos",
                     command=lambda n=nombre: self.seleccionar_evaluacion(n),
-                    fg_color="transparent",
-                    border_width=2,
-                    border_color="gray",
-                    hover_color="gray25",
+                    fg_color=COLORES["secundario"],
+                    border_width=0,
+                    hover_color=COLORES["exito"],
                     anchor="w",
-                    height=50,  # Aumentado para permitir 2 líneas
-                    corner_radius=8,
-                    font=ctk.CTkFont(size=11)  # Fuente ligeramente más pequeña
+                    height=45,
+                    corner_radius=6,
+                    font=self.FUENTES["pequeña"],
+                    text_color="white"
                 )
-                # Configurar wraplength para salto de línea automático
-                btn._text_label.configure(wraplength=280, justify="left")
-                btn.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+                btn.pack(fill="x", padx=2, pady=2)
                 
                 self.eval_buttons[nombre] = btn
-                self.agregar_tooltip(btn, f"Evaluación: {nombre}\nMáximo: {puntos_max} puntos")
             
-            # Seleccionar primera evaluación
             self.seleccionar_evaluacion(evals[0][1])
         else:
-            CTkLabel(self.evals_scroll, text="Sin evaluaciones").pack(pady=10)
+            CTkLabel(self.evals_scroll, 
+                    text="Sin evaluaciones configuradas",
+                    font=self.FUENTES["pequeña"],
+                    text_color=COLORES["texto_secundario"]).pack(pady=20)
             self.current_evaluacion = None
             self.limpiar_tab_notas()
 
@@ -534,12 +535,10 @@ class GestorNotasApp(CTk):
                 messagebox.showerror("Error", error or "No se pudo eliminar")
 
     def editar_rubrica(self):
-        """Abre el editor de rubrica para la evaluacion seleccionada"""
         if not self.current_evaluacion:
-            messagebox.showwarning("Advertencia", "Selecciona una evaluacion primero")
+            messagebox.showwarning("Advertencia", "Seleccione una evaluación primero")
             return
         
-        # Obtener info de la evaluacion
         evals = self.db.get_evaluaciones(self.current_curso)
         eval_info = next((e for e in evals if e[0] == self.current_evaluacion), None)
         if not eval_info:
@@ -548,49 +547,54 @@ class GestorNotasApp(CTk):
         eval_nombre = eval_info[1]
         puntos_max_eval = eval_info[2]
         
-        # Crear ventana de edicion de rubrica
         dialog = ctk.CTkToplevel(self)
-        dialog.title(f"Editar Rubrica - {eval_nombre}")
+        dialog.title(f"Editar Rúbrica - {eval_nombre}")
         dialog.geometry("700x600")
         dialog.transient(self)
         dialog.grab_set()
         
-        # Centrar
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - (700 // 2)
         y = (dialog.winfo_screenheight() // 2) - (600 // 2)
         dialog.geometry(f"700x600+{x}+{y}")
         
-        # Header
-        CTkLabel(dialog, text=f"Rubrica: {eval_nombre}", 
-                font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 5))
+        CTkLabel(dialog,
+                text=f"RÚBRICA: {eval_nombre}",
+                font=self.FUENTES["titulo"],
+                text_color=COLORES["texto"]).pack(pady=(20, 5))
         
-        CTkLabel(dialog, text=f"Puntos maximos de la evaluacion: {puntos_max_eval}", 
-                font=ctk.CTkFont(size=14), text_color="gray").pack()
+        CTkLabel(dialog,
+                text=f"Puntos máximos de la evaluación: {puntos_max_eval}",
+                font=self.FUENTES["normal"],
+                text_color=COLORES["texto_secundario"]).pack()
         
-        # Frame para mostrar total asignado
-        frame_total = CTkFrame(dialog)
+        frame_total = CTkFrame(dialog,
+                              fg_color=COLORES["fondo"],
+                              corner_radius=8)
         frame_total.pack(fill="x", padx=20, pady=10)
         
-        self.lbl_total_rubrica = CTkLabel(frame_total, 
-                                           text="Total asignado en rubrica: 0", 
-                                           font=ctk.CTkFont(size=14, weight="bold"))
-        self.lbl_total_rubrica.pack(side="left", padx=10)
+        self.lbl_total_rubrica = CTkLabel(frame_total,
+                                         text="Total asignado en rúbrica: 0",
+                                         font=self.FUENTES["subtitulo"],
+                                         text_color=COLORES["texto"])
+        self.lbl_total_rubrica.pack(side="left", padx=15, pady=10)
         
-        self.lbl_diferencia = CTkLabel(frame_total, 
-                                        text="(Faltan: 20)", 
-                                        font=ctk.CTkFont(size=12))
+        self.lbl_diferencia = CTkLabel(frame_total,
+                                      text="(Faltan: 20)",
+                                      font=self.FUENTES["normal"],
+                                      text_color=COLORES["alerta"])
         self.lbl_diferencia.pack(side="left", padx=10)
         
-        # Frame scrollable para criterios existentes
-        scroll_criterios = CTkScrollableFrame(dialog, label_text="Criterios de la Rubrica", height=300)
+        scroll_criterios = CTkScrollableFrame(dialog,
+                                             fg_color=COLORES["tarjeta"],
+                                             height=350,
+                                             corner_radius=8)
         scroll_criterios.pack(fill="both", expand=True, padx=20, pady=10)
         
         self.frame_criterios_list = scroll_criterios
-        self.criterios_entries = []  # Lista para guardar referencias
+        self.criterios_entries = []
         
         def actualizar_total():
-            """Actualiza el total de puntos asignados"""
             total = 0
             for entry_info in self.criterios_entries:
                 try:
@@ -599,37 +603,49 @@ class GestorNotasApp(CTk):
                 except:
                     pass
             
-            self.lbl_total_rubrica.configure(text=f"Total asignado en rubrica: {total}")
+            self.lbl_total_rubrica.configure(text=f"Total asignado: {total}")
             
             diferencia = puntos_max_eval - total
             if diferencia == 0:
-                color = "green"
+                color = COLORES["exito"]
                 texto = "(Completo)"
             elif diferencia > 0:
-                color = "orange"
+                color = COLORES["alerta"]
                 texto = f"(Faltan: {diferencia})"
             else:
-                color = "red"
+                color = COLORES["peligro"]
                 texto = f"(Excede por: {abs(diferencia)})"
             
             self.lbl_diferencia.configure(text=texto, text_color=color)
         
         def agregar_fila_criterio(nombre="", puntos="", criterio_id=None):
-            """Agrega una fila para un criterio"""
-            frame = CTkFrame(self.frame_criterios_list)
-            frame.pack(fill="x", pady=2, padx=5)
+            frame = CTkFrame(self.frame_criterios_list,
+                            fg_color=COLORES["fondo"],
+                            corner_radius=6)
+            frame.pack(fill="x", pady=3, padx=2)
             
-            entry_nombre = CTkEntry(frame, placeholder_text="Nombre del criterio", width=350)
-            entry_nombre.pack(side="left", padx=2, fill="x", expand=True)
+            entry_nombre = CTkEntry(frame,
+                                   placeholder_text="Nombre del criterio",
+                                   width=350,
+                                   font=self.FUENTES["normal"],
+                                   fg_color=COLORES["tarjeta"],
+                                   text_color=COLORES["texto"],
+                                   border_color=COLORES["borde"])
+            entry_nombre.pack(side="left", padx=5, pady=5, fill="x", expand=True)
             if nombre:
                 entry_nombre.insert(0, nombre)
             
-            entry_puntos = CTkEntry(frame, placeholder_text="Pts", width=80)
-            entry_puntos.pack(side="left", padx=2)
+            entry_puntos = CTkEntry(frame,
+                                   placeholder_text="Pts",
+                                   width=80,
+                                   font=self.FUENTES["normal"],
+                                   fg_color=COLORES["tarjeta"],
+                                   text_color=COLORES["texto"],
+                                   border_color=COLORES["borde"])
+            entry_puntos.pack(side="left", padx=5, pady=5)
             if puntos:
                 entry_puntos.insert(0, str(puntos))
             
-            # Guardar referencia
             criterio_info = {
                 'frame': frame,
                 'nombre': entry_nombre,
@@ -638,44 +654,47 @@ class GestorNotasApp(CTk):
             }
             self.criterios_entries.append(criterio_info)
             
-            # Bind para actualizar total
             entry_puntos.bind("<KeyRelease>", lambda e: actualizar_total())
             
             def eliminar_fila():
                 frame.destroy()
                 self.criterios_entries.remove(criterio_info)
                 actualizar_total()
-                # Si tenia ID, marcar para eliminar
                 if criterio_id:
                     criterio_info['eliminar'] = True
             
-            CTkButton(frame, text="X", width=30, fg_color="red", 
-                     command=eliminar_fila).pack(side="left", padx=2)
+            CTkButton(frame,
+                     text="X",
+                     width=30,
+                     command=eliminar_fila,
+                     fg_color=COLORES["peligro"],
+                     hover_color="#A93226",
+                     font=self.FUENTES["boton"],
+                     height=28).pack(side="left", padx=5, pady=5)
         
-        # Cargar criterios existentes
         criterios_existentes = self.db.get_criterios_rubrica(self.current_evaluacion)
         if criterios_existentes:
             for crit in criterios_existentes:
                 crit_id, nombre, puntos, orden = crit
                 agregar_fila_criterio(nombre, puntos, crit_id)
         else:
-            # Agregar filas vacias por defecto
             agregar_fila_criterio()
             agregar_fila_criterio()
         
         actualizar_total()
         
-        # Boton agregar mas criterios
-        CTkButton(dialog, text="+ Agregar Criterio", 
-                 command=lambda: agregar_fila_criterio()).pack(pady=5)
+        CTkButton(dialog,
+                 text="+ Agregar Criterio",
+                 command=lambda: agregar_fila_criterio(),
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 font=self.FUENTES["boton"],
+                 height=32).pack(pady=5)
         
-        # Botones de accion
         btn_frame = CTkFrame(dialog, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=20)
+        btn_frame.pack(fill="x", padx=20, pady=15)
         
         def guardar_rubrica():
-            """Guarda todos los criterios de la rubrica"""
-            # Validar que sume el total
             total = 0
             criterios_validos = []
             
@@ -686,7 +705,7 @@ class GestorNotasApp(CTk):
                 except:
                     puntos = 0
                 
-                if nombre:  # Solo si tiene nombre
+                if nombre:
                     total += puntos
                     criterios_validos.append({
                         'nombre': nombre,
@@ -696,97 +715,134 @@ class GestorNotasApp(CTk):
                     })
             
             if total != puntos_max_eval:
-                messagebox.showerror("Error", 
-                    f"Los puntos de la rubrica deben sumar exactamente {puntos_max_eval}.\n"
+                messagebox.showerror("Error",
+                    f"Los puntos de la rúbrica deben sumar exactamente {puntos_max_eval}.\n"
                     f"Actualmente suman: {total}")
                 return
             
-            # Guardar en base de datos
             try:
-                # Eliminar los marcados para eliminar
                 for c in criterios_validos:
                     if c['eliminar'] and c['id']:
                         self.db.eliminar_criterio_rubrica(c['id'])
                 
-                # Agregar o actualizar los demas
                 for idx, c in enumerate(criterios_validos):
                     if not c['eliminar']:
                         if c['id']:
-                            # Actualizar existente
                             self.db.actualizar_criterio_rubrica(c['id'], c['nombre'], c['puntos'], idx)
                         else:
                             self.db.agregar_criterio_rubrica(
-                                self.current_evaluacion, 
-                                c['nombre'], 
+                                self.current_evaluacion,
+                                c['nombre'],
                                 c['puntos'],
                                 idx
                             )
                 
-                messagebox.showinfo("Exito", "Rubrica guardada correctamente")
+                messagebox.showinfo("Éxito", "Rúbrica guardada correctamente")
                 dialog.destroy()
                 
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo guardar: {str(e)}")
         
-        CTkButton(btn_frame, text="Guardar Rubrica", 
-                 command=guardar_rubrica, fg_color="green",
-                 height=40, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5, fill="x", expand=True)
+        CTkButton(btn_frame,
+                 text="Guardar Rúbrica",
+                 command=guardar_rubrica,
+                 fg_color=COLORES["exito"],
+                 hover_color="#219A52",
+                 height=40,
+                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
         
-        CTkButton(btn_frame, text="Cancelar", 
-                 command=dialog.destroy, fg_color="gray").pack(side="left", padx=5, fill="x", expand=True)
+        CTkButton(btn_frame,
+                 text="Cancelar",
+                 command=dialog.destroy,
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 height=40,
+                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
 
     def agregar_estudiante(self):
         if not self.current_curso:
-            messagebox.showwarning("Advertencia", "Selecciona un curso primero")
+            messagebox.showwarning("Advertencia", "Seleccione un curso primero")
             return
         
-        # Crear diálogo personalizado para todos los campos
         dialog = ctk.CTkToplevel(self)
         dialog.title("Nuevo Estudiante")
-        dialog.geometry("450x400")
+        dialog.geometry("450x450")
         dialog.transient(self)
         dialog.grab_set()
         
-        # Centrar
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - (450 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (400 // 2)
-        dialog.geometry(f"450x400+{x}+{y}")
+        y = (dialog.winfo_screenheight() // 2) - (450 // 2)
+        dialog.geometry(f"450x450+{x}+{y}")
         
-        CTkLabel(dialog, text="👤 Nuevo Estudiante", 
-                font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(20, 10))
+        frame = CTkFrame(dialog, fg_color=COLORES["fondo"])
+        frame.pack(fill="both", expand=True, padx=15, pady=15)
         
-        # Frame de campos
-        frame_campos = CTkFrame(dialog)
-        frame_campos.pack(fill="x", padx=30, pady=10)
+        CTkLabel(frame,
+                text="NUEVO ESTUDIANTE",
+                font=self.FUENTES["subtitulo"],
+                text_color=COLORES["texto"]).pack(pady=(15, 20))
         
-        # Nombre
-        CTkLabel(frame_campos, text="Nombre completo:*", 
-                font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 0))
-        entry_nombre = CTkEntry(frame_campos, width=350, placeholder_text="Ej: Juan Pérez")
-        entry_nombre.pack(fill="x", pady=5)
+        campos_frame = CTkFrame(frame,
+                               fg_color=COLORES["tarjeta"],
+                               corner_radius=8)
+        campos_frame.pack(fill="x", padx=10, pady=5)
         
-        # Carné
-        CTkLabel(frame_campos, text="Número de carné:", 
-                font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 0))
-        entry_carne = CTkEntry(frame_campos, width=350, placeholder_text="Ej: 20240001")
-        entry_carne.pack(fill="x", pady=5)
+        CTkLabel(campos_frame,
+                text="Nombre completo *",
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=(15, 5))
+        entry_nombre = CTkEntry(campos_frame,
+                               width=380,
+                               placeholder_text="Ej: Juan Pérez García",
+                               font=self.FUENTES["normal"],
+                               fg_color=COLORES["tarjeta"],
+                               text_color=COLORES["texto"],
+                               border_color=COLORES["borde"])
+        entry_nombre.pack(fill="x", padx=15, pady=5)
         
-        # Grupo
-        CTkLabel(frame_campos, text="Grupo:*", 
-                font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 0))
-        entry_grupo = CTkEntry(frame_campos, width=350, placeholder_text="1")
+        CTkLabel(campos_frame,
+                text="Número de carné",
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=(10, 5))
+        entry_carne = CTkEntry(campos_frame,
+                              width=380,
+                              placeholder_text="Ej: 20240001",
+                              font=self.FUENTES["normal"],
+                              fg_color=COLORES["tarjeta"],
+                              text_color=COLORES["texto"],
+                              border_color=COLORES["borde"])
+        entry_carne.pack(fill="x", padx=15, pady=5)
+        
+        CTkLabel(campos_frame,
+                text="Grupo *",
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=(10, 5))
+        entry_grupo = CTkEntry(campos_frame,
+                              width=380,
+                              placeholder_text="1",
+                              font=self.FUENTES["normal"],
+                              fg_color="white",
+                              border_color=COLORES["borde"])
         entry_grupo.insert(0, "1")
-        entry_grupo.pack(fill="x", pady=5)
+        entry_grupo.pack(fill="x", padx=15, pady=5)
         
-        # Email
-        CTkLabel(frame_campos, text="Email:", 
-                font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 0))
-        entry_email = CTkEntry(frame_campos, width=350, placeholder_text="ejemplo@correo.com")
-        entry_email.pack(fill="x", pady=5)
+        CTkLabel(campos_frame,
+                text="Correo electrónico",
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=(10, 5))
+        entry_email = CTkEntry(campos_frame,
+                              width=380,
+                              placeholder_text="ejemplo@universidad.edu",
+                              font=self.FUENTES["normal"],
+                              fg_color="white",
+                              border_color=COLORES["borde"])
+        entry_email.pack(fill="x", padx=15, pady=(5, 15))
         
-        CTkLabel(dialog, text="* Campos obligatorios", 
-                font=ctk.CTkFont(size=10), text_color="gray").pack()
+        CTkLabel(frame,
+                text="* Campos obligatorios",
+                font=self.FUENTES["pequeña"],
+                text_color=COLORES["texto_secundario"]).pack(pady=5)
         
         def guardar():
             nombre = entry_nombre.get().strip()
@@ -813,9 +869,13 @@ class GestorNotasApp(CTk):
             else:
                 messagebox.showerror("Error", error or "No se pudo agregar el estudiante")
         
-        CTkButton(dialog, text="Guardar Estudiante", 
-                 command=guardar, fg_color="green", 
-                 height=40, font=ctk.CTkFont(weight="bold")).pack(pady=20)
+        CTkButton(frame,
+                 text="Guardar Estudiante",
+                 command=guardar,
+                 fg_color=COLORES["exito"],
+                 hover_color="#219A52",
+                 height=40,
+                 font=self.FUENTES["boton"]).pack(pady=15)
 
     def agregar_varios_estudiantes(self):
         if not self.current_curso:
@@ -828,10 +888,9 @@ class GestorNotasApp(CTk):
         dialog.transient(self)
         dialog.grab_set()
         
-        CTkLabel(dialog, text="👥 Agregar Varios Estudiantes", 
+        CTkLabel(dialog, text="Agregar Varios Estudiantes", 
                 font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(15, 5))
         
-        # Campo para grupo
         CTkLabel(dialog, text="Grupo para todos los estudiantes:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=(10, 0))
         entry_grupo = CTkEntry(dialog, width=100, placeholder_text="1")
@@ -879,7 +938,6 @@ class GestorNotasApp(CTk):
             messagebox.showinfo("Info", "No hay estudiantes en este curso")
             return
         
-        # Crear lista con info completa
         lista_info = []
         for est in estudiantes:
             est_id, nombre, grupo, email, carne = est
@@ -895,17 +953,14 @@ class GestorNotasApp(CTk):
         CTkLabel(dialog, text="Selecciona estudiante a editar:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=10)
         
-        # Combo con nombres
         nombres = [info[0] for info in lista_info]
         est_var = ctk.StringVar(value=nombres[0])
         menu = CTkOptionMenu(dialog, values=nombres, variable=est_var, width=400)
         menu.pack(pady=10)
         
-        # Frame para campos de edición
         frame_edit = CTkFrame(dialog)
         frame_edit.pack(fill="x", padx=30, pady=10)
         
-        # Variables para los entries
         entry_nombre_var = ctk.StringVar()
         entry_carne_var = ctk.StringVar()
         entry_grupo_var = ctk.StringVar()
@@ -926,7 +981,6 @@ class GestorNotasApp(CTk):
                 entry_grupo_var.set(str(grupo))
                 entry_email_var.set(email or "")
         
-        # Campos de edición
         CTkLabel(frame_edit, text="Nombre:", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
         entry_nombre = CTkEntry(frame_edit, width=400, textvariable=entry_nombre_var)
         entry_nombre.pack(fill="x", pady=2)
@@ -943,7 +997,6 @@ class GestorNotasApp(CTk):
         entry_email = CTkEntry(frame_edit, width=400, textvariable=entry_email_var)
         entry_email.pack(fill="x", pady=2)
         
-        # Cargar datos iniciales
         cargar_datos_seleccion()
         est_var.trace_add("write", cargar_datos_seleccion)
         
@@ -1015,72 +1068,80 @@ class GestorNotasApp(CTk):
         CTkButton(dialog, text="Eliminar", command=confirmar, fg_color="red", hover_color="darkred").pack(pady=20)
 
     def load_estudiantes_notas(self):
-        """Carga estudiantes organizados por grupos en tabs separados"""
-        # Limpiar frame anterior
         for widget in self.scroll_frame.winfo_children():
             widget.destroy()
         
         self.entries_notas = {}
         
         if not self.current_curso:
-            CTkLabel(self.scroll_frame, text="Selecciona un curso primero", 
-                    font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20)
+            CTkLabel(self.scroll_frame, 
+                    text="Seleccione un curso para comenzar", 
+                    font=self.FUENTES["normal"],
+                    text_color=COLORES["texto_secundario"]).pack(pady=40)
             return
         
         if not self.current_evaluacion:
-            CTkLabel(self.scroll_frame, text="Selecciona una evaluacion primero", 
-                    font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20)
+            CTkLabel(self.scroll_frame, 
+                    text="Seleccione una evaluación para ver estudiantes", 
+                    font=self.FUENTES["normal"],
+                    text_color=COLORES["texto_secundario"]).pack(pady=40)
             return
         
-        # Obtener info de la evaluación
         evals = self.db.get_evaluaciones(self.current_curso)
         eval_info = next((e for e in evals if e[0] == self.current_evaluacion), None)
         
         if not eval_info:
-            CTkLabel(self.scroll_frame, text="Error: Evaluación no encontrada", 
-                    font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20)
             return
         
         eval_nombre = eval_info[1]
         eval_puntos_max = eval_info[2]
         
-        # Header con info de evaluación
-        header_frame = CTkFrame(self.scroll_frame)
-        header_frame.pack(fill="x", padx=5, pady=5)
+        header_frame = CTkFrame(self.scroll_frame, 
+                               fg_color=COLORES["primario"],
+                               corner_radius=8)
+        header_frame.pack(fill="x", padx=5, pady=(0, 15))
         
         CTkLabel(header_frame, 
-                text=f"Evaluación: {eval_nombre} (Máx: {eval_puntos_max} pts)", 
-                font=ctk.CTkFont(size=16, weight="bold")).pack(side="left", padx=10)
+                text=f"{eval_nombre}",
+                font=self.FUENTES["subtitulo"],
+                text_color="white").pack(side="left", padx=15, pady=12)
+        
+        CTkLabel(header_frame, 
+                text=f"Máximo: {eval_puntos_max} puntos",
+                font=self.FUENTES["normal"],
+                text_color=COLORES["texto_secundario"]).pack(side="right", padx=15)
         
         self.guardado_status_label = CTkLabel(header_frame, 
-                                              text="Estado: Listo", 
-                                              font=ctk.CTkFont(size=12),
-                                              text_color="gray")
+                                              text="Listo", 
+                                              font=self.FUENTES["pequeña"],
+                                              text_color=COLORES["exito"])
         self.guardado_status_label.pack(side="right", padx=10)
         
-        # Obtener todos los estudiantes y organizar por grupos
         todos_estudiantes = self.db.get_estudiantes(self.current_curso)
         
         if not todos_estudiantes:
             CTkLabel(self.scroll_frame, 
-                    text="No hay estudiantes en este curso. Agrega estudiantes usando el botón Agregar Estudiante.", 
-                    font=ctk.CTkFont(size=12)).pack(pady=20)
+                    text="No hay estudiantes registrados en este curso", 
+                    font=self.FUENTES["normal"],
+                    text_color=COLORES["texto_secundario"]).pack(pady=40)
             return
         
-        # Organizar por grupos
         grupos = {}
         for est in todos_estudiantes:
-            # est = (id, nombre, grupo, email, carne)
             grupo_num = est[2]
             if grupo_num not in grupos:
                 grupos[grupo_num] = []
             grupos[grupo_num].append(est)
         
-        # Crear Tabview para los grupos - OCUPAR TODO EL ESPACIO VERTICAL
-        self.tabview_grupos = CTkTabview(self.scroll_frame, height=550)
+        self.tabview_grupos = CTkTabview(self.scroll_frame,
+                                        fg_color=COLORES["fondo"],
+                                        segmented_button_fg_color=COLORES["secundario"],
+                                        segmented_button_selected_color=COLORES["acento"],
+                                        segmented_button_selected_hover_color="#2980B9",
+                                        segmented_button_unselected_color=COLORES["secundario"],
+                                        text_color=COLORES["texto"])
         self.tabview_grupos.pack(fill="both", expand=True, padx=5, pady=5)
         
-        # Crear un tab por cada grupo
         for grupo_num in sorted(grupos.keys()):
             estudiantes_grupo = grupos[grupo_num]
             tab_nombre = f"Grupo {grupo_num}"
@@ -1088,110 +1149,108 @@ class GestorNotasApp(CTk):
             tab = self.tabview_grupos.add(tab_nombre)
             self.crear_contenido_grupo(tab, estudiantes_grupo, eval_puntos_max)
         
-        self.status_label.configure(text=f"{len(todos_estudiantes)} estudiantes en {len(grupos)} grupos")
+        self.status_label.configure(text=f"{len(todos_estudiantes)} estudiantes · {len(grupos)} grupos",
+                                   text_color=COLORES["texto_secundario"])
 
     def crear_contenido_grupo(self, tab_padre, estudiantes, puntos_max):
-        """Crea el contenido de un tab de grupo con lista de estudiantes clickeables"""
+        container = CTkFrame(tab_padre, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # Frame contenedor con ancho mínimo
-        container = CTkFrame(tab_padre)
-        container.pack(fill="both", expand=True, padx=5, pady=5)
+        header = CTkFrame(container, fg_color=COLORES["secundario"], corner_radius=6)
+        header.pack(fill="x", padx=5, pady=(0, 10))
         
-        # Frame scrollable para la lista con ancho y alto fijos
+        CTkLabel(header, text="ESTUDIANTE", 
+                font=self.FUENTES["boton"],
+                text_color="white").pack(side="left", padx=15, pady=10)
+        CTkLabel(header, text="NOTA", 
+                font=self.FUENTES["boton"],
+                text_color="white").pack(side="left", padx=80)
+        CTkLabel(header, text="OBSERVACIONES", 
+                font=self.FUENTES["boton"],
+                text_color="white").pack(side="left", padx=20)
+        
         scroll_grupo = CTkScrollableFrame(container, 
-                                         label_text=f"Estudiantes ({len(estudiantes)})", 
-                                         width=850,
-                                         height=480)  # Altura grande para ver más estudiantes
-        scroll_grupo.pack(fill="both", expand=True, padx=5, pady=5)
+                                         fg_color="transparent",
+                                         height=450)
+        scroll_grupo.pack(fill="both", expand=True)
         
-        # Header de columnas - anchos ajustados para que quepan en pantalla
-        header = CTkFrame(scroll_grupo)
-        header.pack(fill="x", padx=5, pady=2)
-        header.grid_columnconfigure(0, weight=3, minsize=300)  # Nombre más ancho
-        header.grid_columnconfigure(1, weight=0, minsize=120)   # Nota
-        header.grid_columnconfigure(2, weight=1, minsize=200)   # Observaciones
-        
-        CTkLabel(header, text="Estudiante", font=ctk.CTkFont(weight="bold")).grid(
-            row=0, column=0, padx=10, pady=5, sticky="w")
-        CTkLabel(header, text="Nota", font=ctk.CTkFont(weight="bold")).grid(
-            row=0, column=1, padx=10, pady=5, sticky="ew")
-        CTkLabel(header, text="Observaciones", font=ctk.CTkFont(weight="bold")).grid(
-            row=0, column=2, padx=10, pady=5, sticky="w")
-        
-        CTkFrame(scroll_grupo, height=2, fg_color="gray").pack(fill="x", padx=5, pady=2)
-        
-        # Filas de estudiantes
-        for est in estudiantes:
+        for idx, est in enumerate(estudiantes):
             est_id, nombre, grupo_num, email, carne = est
             
-            row = CTkFrame(scroll_grupo, height=30)  # Altura fija más compacta
-            row.pack(fill="x", padx=5, pady=1)  # Menos padding vertical
-            row.pack_propagate(False)  # Forzar altura fija
-            row.grid_columnconfigure(0, weight=3, minsize=300)
-            row.grid_columnconfigure(1, weight=0, minsize=120)
-            row.grid_columnconfigure(2, weight=1, minsize=200)
+            bg_color = COLORES["tarjeta"] if idx % 2 == 0 else COLORES["fondo"]
             
-            # --- NOMBRE CLICKEABLE ---
-            nombre_container = CTkFrame(row, fg_color="transparent")
-            nombre_container.grid(row=0, column=0, padx=10, pady=2, sticky="w")
+            row = CTkFrame(scroll_grupo, fg_color=bg_color, corner_radius=4)
+            row.pack(fill="x", pady=1, padx=5)
+            row.pack_propagate(False)
+            row.configure(height=42)
+            
+            nombre_container = CTkFrame(row, fg_color="transparent", width=280)
+            nombre_container.pack(side="left", padx=10, pady=5)
+            nombre_container.pack_propagate(False)
             
             lbl_nombre = CTkLabel(nombre_container, 
-                                 text=f" {nombre}", 
-                                 font=ctk.CTkFont(size=12),
+                                 text=nombre,
+                                 font=self.FUENTES["normal"],
+                                 text_color=COLORES["texto"],
                                  cursor="hand2")
             lbl_nombre.pack(anchor="w")
             
-            # Bind click para mostrar modal
             lbl_nombre.bind("<Button-1>", 
                            lambda e, est=est: self.mostrar_modal_estudiante(est))
             
-            # Efecto hover
             def on_enter(e, widget=lbl_nombre):
-                widget.configure(text_color="blue", font=ctk.CTkFont(size=12, weight="bold"))
+                widget.configure(text_color=COLORES["acento"], 
+                               font=ctk.CTkFont(family="Helvetica", size=12, weight="bold"))
             def on_leave(e, widget=lbl_nombre):
-                widget.configure(text_color=["black", "white"], font=ctk.CTkFont(size=12))
+                widget.configure(text_color=COLORES["texto"], 
+                               font=self.FUENTES["normal"])
             
             lbl_nombre.bind("<Enter>", on_enter)
             lbl_nombre.bind("<Leave>", on_leave)
             
-            # --- CAMPO DE NOTA ---
             nota_existente, obs_existente = self.db.get_nota(est_id, self.current_evaluacion)
-            
-            # Verificar si la evaluacion tiene rubrica
             tiene_rubrica = len(self.db.get_criterios_rubrica(self.current_evaluacion)) > 0
             
-            nota_container = CTkFrame(row, fg_color="transparent")
-            nota_container.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
+            nota_container = CTkFrame(row, fg_color="transparent", width=120)
+            nota_container.pack(side="left", padx=5, pady=5)
             
             nota_var = ctk.StringVar(value=str(nota_existente) if nota_existente is not None else "")
-            entry_nota = CTkEntry(nota_container, width=80, textvariable=nota_var, 
-                     justify="center", placeholder_text=f"0-{puntos_max}")
+            entry_nota = CTkEntry(nota_container, width=70, 
+                                 textvariable=nota_var,
+                                 justify="center",
+                                 font=self.FUENTES["normal"],
+                                 fg_color=COLORES["tarjeta"],
+                                 text_color=COLORES["texto"],
+                                 border_color=COLORES["borde"])
             entry_nota.pack(side="left", padx=2)
             
-            # Indicador visual diferente si tiene rubrica
             if tiene_rubrica and nota_existente:
-                estado_text = "[R]"  # Indicador de rubrica
-                tooltip_text = "Calificado por rubrica - Clic para editar"
+                estado_text = "R"
+                estado_color = COLORES["acento"]
             elif nota_existente:
                 estado_text = "OK"
-                tooltip_text = "Calificado"
+                estado_color = COLORES["exito"]
             else:
                 estado_text = "-"
-                tooltip_text = "Sin calificar - Clic para calificar"
+                estado_color = COLORES["texto_secundario"]
             
-            estado_color = "green" if nota_existente else "gray"
-            estado_label = CTkLabel(nota_container, text=estado_text, width=25, 
-                                   text_color=estado_color, font=ctk.CTkFont(size=11, weight="bold"))
-            estado_label.pack(side="left", padx=2)
-            self.agregar_tooltip(estado_label, tooltip_text)
+            estado_label = CTkLabel(nota_container, text=estado_text, width=20,
+                                   text_color=estado_color,
+                                   font=self.FUENTES["boton"])
+            estado_label.pack(side="left", padx=5)
             
-            # --- OBSERVACIONES ---
             obs_var = ctk.StringVar(value=obs_existente or "")
-            entry_obs = CTkEntry(row, textvariable=obs_var, placeholder_text="Obs...", width=150)
-            entry_obs.grid(row=0, column=2, padx=10, pady=2, sticky="ew")
+            entry_obs = CTkEntry(row, 
+                                textvariable=obs_var,
+                                placeholder_text="Sin observaciones",
+                                font=self.FUENTES["pequeña"],
+                                fg_color=COLORES["tarjeta"],
+                                text_color=COLORES["texto"],
+                                border_color=COLORES["borde"])
+            entry_obs.pack(side="left", fill="x", expand=True, padx=10, pady=8)
             
-            # --- GUARDADO AUTOMÁTICO ---
-            def guardar_al_salir(event, eid=est_id, nv=nota_var, ov=obs_var, el=estado_label, pm=puntos_max):
+            def guardar_al_salir(event, eid=est_id, nv=nota_var, ov=obs_var, 
+                                el=estado_label, pm=puntos_max):
                 self.guardar_nota_auto(eid, nv, ov, el, pm)
             
             entry_nota.bind("<FocusOut>", guardar_al_salir)
@@ -1201,9 +1260,7 @@ class GestorNotasApp(CTk):
             
             self.entries_notas[est_id] = (nota_var, obs_var, estado_label)
 
-    
     def mostrar_modal_estudiante(self, estudiante):
-        """Muestra modal con datos del estudiante y rubrica de evaluacion"""
         est_id, nombre, grupo, email, carne = estudiante
         
         if not self.current_evaluacion:
@@ -1223,123 +1280,132 @@ class GestorNotasApp(CTk):
         criterios = self.db.get_criterios_rubrica(self.current_evaluacion)
         
         if not criterios:
-            self.mostrar_modal_estudiante_simple(estudiante, 
-                mensaje_extra="\n\nEsta evaluacion no tiene rubrica definida.\nVe a 'Rubrica' para crearla.")
+            self.mostrar_modal_estudiante_simple(estudiante,
+                mensaje_extra="\n\nEsta evaluación no tiene rúbrica definida.\nUse el botón 'Rúbrica' para crearla.")
             return
         
-        # Calcular altura necesaria basada en numero de criterios
-        # Aumentado el espacio por criterio y el espacio base para asegurar visibilidad de botones
-        altura_por_criterio = 90
-        altura_minima = 550
-        altura_maxima = 900
-        # Altura base aumentada para asegurar espacio para header, info, titulo, total y botones
-        altura_base = 400
+        altura_por_criterio = 80
+        altura_minima = 500
+        altura_maxima = 800
+        altura_base = 350
         altura_calculada = min(max(altura_minima, altura_base + (len(criterios) * altura_por_criterio)), altura_maxima)
         
-        # Crear modal con tamano dinamico
         modal = ctk.CTkToplevel(self)
         modal.title(f"Calificar: {nombre}")
-        modal.geometry(f"650x{altura_calculada}")
+        modal.geometry(f"600x{altura_calculada}")
         modal.transient(self)
         modal.grab_set()
         
-        # Centrar en pantalla
         modal.update_idletasks()
-        x = (modal.winfo_screenwidth() // 2) - (650 // 2)
+        x = (modal.winfo_screenwidth() // 2) - (600 // 2)
         y = (modal.winfo_screenheight() // 2) - (altura_calculada // 2)
-        modal.geometry(f"650x{altura_calculada}+{x}+{y}")
+        modal.geometry(f"600x{altura_calculada}+{x}+{y}")
         
-        # Frame principal que ocupa todo
-        main_frame = CTkFrame(modal)
+        main_frame = CTkFrame(modal, fg_color=COLORES["fondo"])
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # Header compacto
-        header_frame = CTkFrame(main_frame, fg_color="blue", height=50)
-        header_frame.pack(fill="x", pady=(0, 5))
-        header_frame.pack_propagate(False)
+        header_frame = CTkFrame(main_frame,
+                               fg_color=COLORES["primario"],
+                               corner_radius=8)
+        header_frame.pack(fill="x", pady=(0, 10))
         
-        CTkLabel(header_frame, text=f"{nombre}", 
-                font=ctk.CTkFont(size=16, weight="bold"),
-                text_color="white").pack(pady=5)
+        CTkLabel(header_frame,
+                text=nombre,
+                font=self.FUENTES["subtitulo"],
+                text_color="white").pack(pady=12)
         
-        # Info basica en una linea (mas compacto)
-        info_frame = CTkFrame(main_frame)
-        info_frame.pack(fill="x", pady=2)
+        info_frame = CTkFrame(main_frame,
+                             fg_color=COLORES["tarjeta"],
+                             corner_radius=6)
+        info_frame.pack(fill="x", pady=5)
         
-        info_text = f"Grupo: {grupo}  |  "
-        info_text += f"Carne: {carne or 'N/A'}  |  "
-        info_text += f"Email: {email or 'N/A'}"
+        info_text = f"Grupo: {grupo}  |  Carné: {carne or 'N/A'}  |  Email: {email or 'N/A'}"
         
-        CTkLabel(info_frame, text=info_text, 
-                font=ctk.CTkFont(size=11),
-                text_color="gray").pack(pady=2)
+        CTkLabel(info_frame,
+                text=info_text,
+                font=self.FUENTES["pequeña"],
+                text_color=COLORES["texto_secundario"]).pack(pady=8)
         
-        # Titulo de rubrica compacto
-        title_frame = CTkFrame(main_frame)
-        title_frame.pack(fill="x", pady=5)
+        title_frame = CTkFrame(main_frame, fg_color="transparent")
+        title_frame.pack(fill="x", pady=10)
         
-        CTkLabel(title_frame, text=f"{eval_nombre}", 
-                font=ctk.CTkFont(size=14, weight="bold")).pack(side="left", padx=5)
-        CTkLabel(title_frame, text=f"(Max: {puntos_max_eval} pts)", 
-                font=ctk.CTkFont(size=11),
-                text_color="gray").pack(side="left", padx=5)
+        CTkLabel(title_frame,
+                text=eval_nombre,
+                font=self.FUENTES["subtitulo"],
+                text_color=COLORES["texto"]).pack(side="left", padx=5)
+        CTkLabel(title_frame,
+                text=f"(Máx: {puntos_max_eval} pts)",
+                font=self.FUENTES["normal"],
+                text_color=COLORES["texto_secundario"]).pack(side="left", padx=5)
         
-        # Frame scrollable para criterios - altura flexible pero con minimo garantizado
-        # Calcular altura del scroll dejando espacio fijo para elementos inferiores
-        altura_fija_inferior = 180  # Espacio reservado para total, botones y margenes
-        altura_scroll = max(200, altura_calculada - 320)  # Minimo 200px para el scroll
+        altura_scroll = max(200, altura_calculada - 300)
         
-        scroll_rubrica = CTkScrollableFrame(main_frame, 
-                                           label_text=f"Criterios ({len(criterios)})", 
-                                           height=altura_scroll)
+        scroll_rubrica = CTkScrollableFrame(main_frame,
+                                           fg_color=COLORES["tarjeta"],
+                                           height=altura_scroll,
+                                           corner_radius=8)
         scroll_rubrica.pack(fill="both", expand=True, pady=5)
         
-        # Obtener calificaciones previas
         calificaciones_previas = self.db.get_calificaciones_rubrica_estudiante(est_id, self.current_evaluacion)
         
-        # Diccionario para guardar entries
         entries_criterios = {}
         
-        # Crear campos para cada criterio (mas compactos)
         for crit in calificaciones_previas:
             crit_id, nombre_criterio, puntos_max, puntos_obtenidos, obs = crit
             
-            # Frame mas compacto para cada criterio
-            frame_crit = CTkFrame(scroll_rubrica)
-            frame_crit.pack(fill="x", pady=3, padx=3)
+            frame_crit = CTkFrame(scroll_rubrica,
+                                 fg_color=COLORES["fondo"],
+                                 corner_radius=6)
+            frame_crit.pack(fill="x", pady=4, padx=2)
             
-            # Nombre y maximo en una linea
             header_crit = CTkFrame(frame_crit, fg_color="transparent")
-            header_crit.pack(fill="x", padx=5, pady=(3, 0))
+            header_crit.pack(fill="x", padx=10, pady=(8, 4))
             
-            CTkLabel(header_crit, text=nombre_criterio, 
-                    font=ctk.CTkFont(size=12, weight="bold")).pack(side="left")
-            CTkLabel(header_crit, text=f" (max: {puntos_max})", 
-                    font=ctk.CTkFont(size=10),
-                    text_color="gray").pack(side="left", padx=5)
+            CTkLabel(header_crit,
+                    text=nombre_criterio,
+                    font=self.FUENTES["boton"],
+                    text_color=COLORES["texto"]).pack(side="left")
+            CTkLabel(header_crit,
+                    text=f"(máx: {puntos_max})",
+                    font=self.FUENTES["pequeña"],
+                    text_color=COLORES["texto_secundario"]).pack(side="left", padx=5)
             
-            # Frame para inputs en una linea
             input_frame = CTkFrame(frame_crit, fg_color="transparent")
-            input_frame.pack(fill="x", padx=5, pady=3)
+            input_frame.pack(fill="x", padx=10, pady=(0, 8))
             
-            # Entry para puntos (mas compacto)
             var_puntos = ctk.StringVar(value=str(puntos_obtenidos) if puntos_obtenidos > 0 else "")
-            entry_puntos = CTkEntry(input_frame, width=80, height=28,
+            entry_puntos = CTkEntry(input_frame,
+                                   width=70,
+                                   height=28,
                                    textvariable=var_puntos,
-                                   placeholder_text=f"0-{puntos_max}")
+                                   placeholder_text=f"0-{puntos_max}",
+                                   font=self.FUENTES["normal"],
+                                   fg_color=COLORES["tarjeta"],
+                                   text_color=COLORES["texto"],
+                                   border_color=COLORES["borde"])
             entry_puntos.pack(side="left", padx=2)
             
-            CTkLabel(input_frame, text="/", font=ctk.CTkFont(size=12)).pack(side="left", padx=2)
-            CTkLabel(input_frame, text=f"{puntos_max}", 
-                    font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=2)
+            CTkLabel(input_frame,
+                    text="/",
+                    font=self.FUENTES["normal"],
+                    text_color=COLORES["texto_secundario"]).pack(side="left", padx=2)
+            CTkLabel(input_frame,
+                    text=f"{puntos_max}",
+                    font=self.FUENTES["boton"],
+                    text_color=COLORES["texto"]).pack(side="left", padx=2)
             
-            # Entry para observaciones (mas ancho)
             var_obs = ctk.StringVar(value=obs or "")
-            entry_obs = CTkEntry(input_frame, placeholder_text="Obs...", 
-                                textvariable=var_obs, width=300, height=28)
+            entry_obs = CTkEntry(input_frame,
+                                placeholder_text="Observaciones...",
+                                textvariable=var_obs,
+                                width=280,
+                                height=28,
+                                font=self.FUENTES["pequeña"],
+                                fg_color=COLORES["tarjeta"],
+                                text_color=COLORES["texto"],
+                                border_color=COLORES["borde"])
             entry_obs.pack(side="left", padx=10, fill="x", expand=True)
             
-            # Guardar referencia
             entries_criterios[crit_id] = {
                 'puntos': var_puntos,
                 'obs': var_obs,
@@ -1347,15 +1413,16 @@ class GestorNotasApp(CTk):
                 'nombre': nombre_criterio
             }
         
-        # Frame inferior fijo (no se mueve con el scroll) - SIEMPRE VISIBLE
-        bottom_frame = CTkFrame(main_frame)
-        bottom_frame.pack(fill="x", pady=5)
+        bottom_frame = CTkFrame(main_frame,
+                               fg_color=COLORES["tarjeta"],
+                               corner_radius=8)
+        bottom_frame.pack(fill="x", pady=10)
         
-        # Label para mostrar total (mas visible)
-        lbl_total = CTkLabel(bottom_frame, 
+        lbl_total = CTkLabel(bottom_frame,
                             text=f"Total: 0 / {puntos_max_eval}",
-                            font=ctk.CTkFont(size=18, weight="bold"))
-        lbl_total.pack(pady=5)
+                            font=self.FUENTES["subtitulo"],
+                            text_color=COLORES["texto"])
+        lbl_total.pack(pady=10)
         
         def calcular_total():
             total = 0
@@ -1366,119 +1433,135 @@ class GestorNotasApp(CTk):
                 except:
                     pass
             
-            color = "green" if total == puntos_max_eval else "orange" if total < puntos_max_eval else "red"
+            if total == puntos_max_eval:
+                color = COLORES["exito"]
+            elif total < puntos_max_eval:
+                color = COLORES["alerta"]
+            else:
+                color = COLORES["peligro"]
+            
             lbl_total.configure(text=f"Total: {total} / {puntos_max_eval}", text_color=color)
             return total
         
-        # Calcular inicial
         calcular_total()
         
-        # Actualizar total cuando cambien los valores
         for entries in entries_criterios.values():
             entries['puntos'].trace_add("write", lambda *args: calcular_total())
         
-        # ========== BOTONES ==========
         btn_frame = CTkFrame(bottom_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=5)
+        btn_frame.pack(fill="x", padx=10, pady=(0, 10))
         
         def aceptar_y_guardar():
-            """Guarda todos los criterios y la nota total"""
             try:
                 total = 0
                 
-                # Guardar cada criterio
                 for crit_id, entries in entries_criterios.items():
                     puntos_str = entries['puntos'].get().strip()
                     puntos = float(puntos_str) if puntos_str else 0
                     obs = entries['obs'].get().strip()
                     
-                    # Validar maximo del criterio
                     if puntos > entries['max']:
-                        messagebox.showerror("Error", 
-                            f"'{entries['nombre']}': maximo {entries['max']} puntos")
+                        messagebox.showerror("Error",
+                            f"'{entries['nombre']}': máximo {entries['max']} puntos")
                         return
                     
-                    # Guardar en rubrica
                     self.db.guardar_calificacion_rubrica(est_id, crit_id, puntos, obs)
                     total += puntos
                 
-                # Validar total no exceda
                 if total > puntos_max_eval:
-                    messagebox.showerror("Error", 
-                        f"Total ({total}) excede el maximo ({puntos_max_eval})")
+                    messagebox.showerror("Error",
+                        f"Total ({total}) excede el máximo ({puntos_max_eval})")
                     return
                 
-                # Guardar en tabla de notas
-                self.db.guardar_nota(est_id, self.current_evaluacion, total, "Calificado por rubrica")
+                self.db.guardar_nota(est_id, self.current_evaluacion, total, "Calificado por rúbrica")
                 
-                # Actualizar vista
                 self.load_estudiantes_notas()
                 self.actualizar_resumen()
                 
-                # Cerrar modal
                 modal.destroy()
                 
-                # Mostrar confirmacion
                 self.status_label.configure(
                     text=f"Guardado: {nombre} = {total}/{puntos_max_eval} pts",
-                    text_color="green"
+                    text_color=COLORES["exito"]
                 )
                 
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo guardar: {str(e)}")
         
-        # Botones grandes y visibles
-        CTkButton(btn_frame, text="ACEPTAR", 
+        CTkButton(btn_frame,
+                 text="GUARDAR",
                  command=aceptar_y_guardar,
-                 fg_color="green", 
-                 hover_color="darkgreen",
-                 height=45,
-                 font=ctk.CTkFont(size=15, weight="bold")).pack(side="left", padx=5, fill="x", expand=True)
+                 fg_color=COLORES["exito"],
+                 hover_color="#219A52",
+                 height=40,
+                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
         
-        CTkButton(btn_frame, text="Cancelar", 
+        CTkButton(btn_frame,
+                 text="Cancelar",
                  command=modal.destroy,
-                 fg_color="gray", 
-                 hover_color="darkgray",
-                 height=45,
-                 font=ctk.CTkFont(size=14)).pack(side="left", padx=5, fill="x", expand=True)
-        
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 height=40,
+                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
+
     def mostrar_modal_estudiante_simple(self, estudiante, mensaje_extra=""):
-        """Muestra solo los datos basicos del estudiante (sin rubrica)"""
         est_id, nombre, grupo, email, carne = estudiante
         
-        modal = CTkToplevel(self)
-        modal.title(f"Datos del Estudiante")
-        modal.geometry("400x350")
+        modal = ctk.CTkToplevel(self)
+        modal.title("Datos del Estudiante")
+        modal.geometry("400x300")
         modal.transient(self)
         modal.grab_set()
         
-        # Centrar
         modal.update_idletasks()
         x = (modal.winfo_screenwidth() // 2) - (400 // 2)
-        y = (modal.winfo_screenheight() // 2) - (350 // 2)
-        modal.geometry(f"400x350+{x}+{y}")
+        y = (modal.winfo_screenheight() // 2) - (300 // 2)
+        modal.geometry(f"400x300+{x}+{y}")
         
-        CTkLabel(modal, text="Estudiante", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(20, 10))
-        CTkLabel(modal, text=nombre, font=ctk.CTkFont(size=18, weight="bold")).pack()
+        frame = CTkFrame(modal, fg_color=COLORES["fondo"])
+        frame.pack(fill="both", expand=True, padx=15, pady=15)
         
-        frame_datos = CTkFrame(modal)
-        frame_datos.pack(fill="x", padx=30, pady=20)
+        CTkLabel(frame,
+                text="INFORMACIÓN DEL ESTUDIANTE",
+                font=self.FUENTES["subtitulo"],
+                text_color=COLORES["texto"]).pack(pady=(15, 10))
         
-        CTkLabel(frame_datos, text="Grupo:", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w", padx=10, pady=5)
-        CTkLabel(frame_datos, text=str(grupo)).grid(row=0, column=1, sticky="w", padx=10, pady=5)
+        CTkLabel(frame,
+                text=nombre,
+                font=self.FUENTES["titulo"],
+                text_color=COLORES["primario"]).pack()
         
-        CTkLabel(frame_datos, text="Carne:", font=ctk.CTkFont(weight="bold")).grid(row=1, column=0, sticky="w", padx=10, pady=5)
-        CTkLabel(frame_datos, text=carne or "No registrado").grid(row=1, column=1, sticky="w", padx=10, pady=5)
+        datos_frame = CTkFrame(frame,
+                              fg_color=COLORES["tarjeta"],
+                              corner_radius=8)
+        datos_frame.pack(fill="x", padx=20, pady=15)
         
-        CTkLabel(frame_datos, text="Email:", font=ctk.CTkFont(weight="bold")).grid(row=2, column=0, sticky="w", padx=10, pady=5)
-        CTkLabel(frame_datos, text=email or "No registrado").grid(row=2, column=1, sticky="w", padx=10, pady=5)
+        CTkLabel(datos_frame,
+                text=f"Grupo: {grupo}",
+                font=self.FUENTES["normal"],
+                text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=5)
+        CTkLabel(datos_frame,
+                text=f"Carné: {carne or 'No registrado'}",
+                font=self.FUENTES["normal"],
+                text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=5)
+        CTkLabel(datos_frame,
+                text=f"Email: {email or 'No registrado'}",
+                font=self.FUENTES["normal"],
+                text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=5)
         
         if mensaje_extra:
-            CTkLabel(modal, text=mensaje_extra, 
-                    font=ctk.CTkFont(size=12),
-                    text_color="orange").pack(pady=10)
+            CTkLabel(frame,
+                    text=mensaje_extra,
+                    font=self.FUENTES["pequeña"],
+                    text_color=COLORES["alerta"]).pack(pady=10)
         
-        CTkButton(modal, text="Cerrar", command=modal.destroy, fg_color="blue").pack(pady=20)
+        CTkButton(frame,
+                 text="Cerrar",
+                 command=modal.destroy,
+                 fg_color=COLORES["acento"],
+                 hover_color="#2980B9",
+                 height=35,
+                 font=self.FUENTES["boton"]).pack(pady=15)
 
     def guardar_nota_auto(self, estudiante_id, nota_var, obs_var, estado_label, puntos_maximos=None):
         """Guarda nota automáticamente validando que no exceda el máximo de la evaluación"""
@@ -1487,13 +1570,12 @@ class GestorNotasApp(CTk):
             
             if not puntos_str:
                 estado_label.configure(text="-", text_color="gray")
-                if hasattr(self, 'guardado_status_label'):
+                if hasattr(self, 'guardado_status_label') and self.guardado_status_label.winfo_exists():
                     self.guardado_status_label.configure(text="Estado: Sin cambios", text_color="gray")
                 return
             
             puntos_ingresados = float(puntos_str)
             
-            # Si no se pasó puntos_maximos, obtenerlo de la evaluación actual
             if puntos_maximos is None:
                 evals = self.db.get_evaluaciones(self.current_curso)
                 eval_info = next((e for e in evals if e[0] == self.current_evaluacion), None)
@@ -1503,36 +1585,33 @@ class GestorNotasApp(CTk):
                     return
                 puntos_maximos = eval_info[2] 
             
-            # Validar que no exceda el máximo
             if puntos_ingresados < 0:
                 estado_label.configure(text="ERR", text_color="red")
                 self.status_label.configure(text="Error: No puede ser negativo", text_color="red")
-                if hasattr(self, 'guardado_status_label'):
+                if hasattr(self, 'guardado_status_label') and self.guardado_status_label.winfo_exists():
                     self.guardado_status_label.configure(text="Estado: Error", text_color="red")
                 return
                 
             if puntos_ingresados > puntos_maximos:
                 estado_label.configure(text="ERR", text_color="red")
                 self.status_label.configure(text=f"Error: Máximo {puntos_maximos} puntos", text_color="red")
-                if hasattr(self, 'guardado_status_label'):
+                if hasattr(self, 'guardado_status_label') and self.guardado_status_label.winfo_exists():
                     self.guardado_status_label.configure(text="Estado: Error - Excede máximo", text_color="red")
                 return
             
-            # Guardar los puntos directamente
             self.db.guardar_nota(estudiante_id, self.current_evaluacion, puntos_ingresados, obs_var.get())
             
             estado_label.configure(text="OK", text_color="green")
             self.status_label.configure(text=f"Guardado: {puntos_ingresados}/{puntos_maximos} pts", text_color="green")
-            if hasattr(self, 'guardado_status_label'):
+            if hasattr(self, 'guardado_status_label') and self.guardado_status_label.winfo_exists():
                 self.guardado_status_label.configure(text="Estado: Guardado", text_color="green")
             
-            # Actualizar resumen delay
             self.after(100, self.actualizar_resumen)
             
         except ValueError:
             estado_label.configure(text="ERR", text_color="red")
             self.status_label.configure(text="Error: Ingresa un número válido", text_color="red")
-            if hasattr(self, 'guardado_status_label'):
+            if hasattr(self, 'guardado_status_label') and self.guardado_status_label.winfo_exists():
                 self.guardado_status_label.configure(text="Estado: Error de formato", text_color="red")
 
     def refrescar_vista(self):
@@ -1541,49 +1620,66 @@ class GestorNotasApp(CTk):
             self.status_label.configure(text="Vista actualizada")
 
     def setup_tab_notas(self):
-        # Configurar el grid del tab para que ocupe todo el espacio
         self.tab_notas.grid_columnconfigure(0, weight=1)
-        self.tab_notas.grid_rowconfigure(1, weight=1)  # Fila 1 es donde va la lista de estudiantes
+        self.tab_notas.grid_rowconfigure(1, weight=1)
+        self.tab_notas.configure(fg_color=COLORES["tarjeta"])
         
-        # Frame de info arriba (fila 0)
-        self.info_frame = CTkFrame(self.tab_notas)
-        self.info_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        self.info_frame = CTkFrame(self.tab_notas, 
+                                  fg_color=COLORES["fondo"],
+                                  corner_radius=8)
+        self.info_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(15, 5))
         
         self.info_label = CTkLabel(self.info_frame, 
-                                  text="Selecciona un curso y evaluacion para comenzar", 
-                                  font=ctk.CTkFont(size=14, weight="bold"))
-        self.info_label.pack(pady=10)
+                                  text="Seleccione un curso y evaluación para comenzar", 
+                                  font=self.FUENTES["subtitulo"],
+                                  text_color=COLORES["texto"])
+        self.info_label.pack(pady=12)
         
-        # Frame para la lista de estudiantes (fila 1) - ESTE DEBE EXPANDIRSE
         self.scroll_frame = CTkScrollableFrame(self.tab_notas, 
-                                              label_text="Lista de Estudiantes",
-                                              height=600)  # Altura fija grande
-        self.scroll_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+                                              fg_color="transparent",
+                                              corner_radius=8)
+        self.scroll_frame.grid(row=1, column=0, sticky="nsew", padx=15, pady=5)
         self.scroll_frame.grid_columnconfigure(0, weight=1)
-        self.scroll_frame.grid_rowconfigure(0, weight=1)
         
-        # Botón refrescar abajo (fila 2)
         self.btn_refrescar = CTkButton(self.tab_notas, 
-                                      text="Refrescar Datos", 
+                                      text="Actualizar Vista", 
                                       command=self.refrescar_vista, 
-                                      height=40, 
-                                      font=ctk.CTkFont(size=14))
-        self.btn_refrescar.grid(row=2, column=0, pady=10)
+                                      height=40,
+                                      fg_color=COLORES["secundario"],
+                                      hover_color=COLORES["primario"],
+                                      font=self.FUENTES["boton"])
+        self.btn_refrescar.grid(row=2, column=0, pady=15)
 
     def setup_tab_config(self):
         self.tab_config.grid_columnconfigure(0, weight=1)
         self.tab_config.grid_rowconfigure(0, weight=1)
-        self.config_text = ctk.CTkTextbox(self.tab_config, wrap="word", font=ctk.CTkFont(size=12))
-        self.config_text.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        self.config_text.insert("0.0", "Aqui se mostrara la configuracion del curso seleccionado...")
+        self.tab_config.configure(fg_color=COLORES["tarjeta"])
+        
+        self.config_text = ctk.CTkTextbox(self.tab_config, 
+                                         wrap="word", 
+                                         font=self.FUENTES["normal"],
+                                         fg_color=COLORES["fondo"],
+                                         text_color=COLORES["texto"],
+                                         border_color=COLORES["borde"],
+                                         corner_radius=8)
+        self.config_text.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
+        self.config_text.insert("0.0", "Seleccione un curso para ver su configuración...")
         self.config_text.configure(state="disabled")
 
     def setup_tab_resumen(self):
         self.tab_resumen.grid_columnconfigure(0, weight=1)
         self.tab_resumen.grid_rowconfigure(0, weight=1)
-        self.resumen_text = ctk.CTkTextbox(self.tab_resumen, wrap="word", font=ctk.CTkFont(size=12))
-        self.resumen_text.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        self.resumen_text.insert("0.0", "Selecciona un curso para ver estadisticas...")
+        self.tab_resumen.configure(fg_color=COLORES["tarjeta"])
+        
+        self.resumen_text = ctk.CTkTextbox(self.tab_resumen, 
+                                          wrap="word", 
+                                          font=self.FUENTES["normal"],
+                                          fg_color=COLORES["fondo"],
+                                          text_color=COLORES["texto"],
+                                          border_color=COLORES["borde"],
+                                          corner_radius=8)
+        self.resumen_text.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
+        self.resumen_text.insert("0.0", "Seleccione un curso para ver estadísticas...")
         self.resumen_text.configure(state="disabled")
 
     def actualizar_config_curso(self):
@@ -1594,24 +1690,24 @@ class GestorNotasApp(CTk):
         evals = self.db.get_evaluaciones(self.current_curso)
         total_puntos = sum(e[2] for e in evals)
         
-        texto = f"CONFIGURACION DEL CURSO\n"
-        texto += f"{'='*50}\n\n"
+        texto = f"CONFIGURACIÓN DEL CURSO\n"
+        texto += f"{'─' * 50}\n\n"
         texto += f"Nombre: {curso[1]}\n"
-        texto += f"Descripcion: {curso[2] or 'Ninguna'}\n\n"
-        texto += f"EVALUACIONES ({len(evals)} total, {total_puntos} puntos asignados):\n"
-        texto += f"{'-'*50}\n"
+        texto += f"Descripción: {curso[2] or 'No especificada'}\n\n"
+        texto += f"EVALUACIONES ({len(evals)} total, {total_puntos} puntos asignados)\n"
+        texto += f"{'─' * 50}\n"
         
         if evals:
             for e in evals:
-                # e[0]=id, e[1]=nombre, e[2]=puntos_maximos, e[3]=orden, e[4]=fecha
-                texto += f"{e[3]}. {e[1]} - Máximo: {e[2]} puntos\n"
+                texto += f"  {e[3]}. {e[1]} — {e[2]} puntos\n"
             if total_puntos != 100:
-                texto += f"\n⚠️ ADVERTENCIA: El total es {total_puntos} puntos, deberia ser 100 puntos\n"
+                texto += f"\n⚠ Advertencia: El total es {total_puntos} puntos (debería ser 100)\n"
         else:
-            texto += "No hay evaluaciones configuradas\n"
+            texto += "  No hay evaluaciones configuradas\n"
         
         estudiantes = self.db.get_estudiantes(self.current_curso)
         texto += f"\n\nESTUDIANTES: {len(estudiantes)}\n"
+        texto += f"{'─' * 50}\n"
         
         grupos = {}
         for e in estudiantes:
@@ -1660,19 +1756,22 @@ class GestorNotasApp(CTk):
         curso = next((c for c in cursos if c[0] == self.current_curso), None)
         evals = self.db.get_evaluaciones(self.current_curso)
         estudiantes = self.db.get_estudiantes(self.current_curso)
+        
         texto = f"RESUMEN: {curso[1]}\n"
-        texto += f"{'='*50}\n\n"
+        texto += f"{'─' * 50}\n\n"
+        
         if estudiantes and evals:
             promedios = []
             for est in estudiantes:
                 prom, _ = self.db.calcular_promedio(est[0], self.current_curso)
                 promedios.append(prom)
-            import statistics
-            texto += f"PROMEDIO GENERAL (suma de puntos): {statistics.mean(promedios):.2f}/100\n"
-            texto += f"Nota máxima: {max(promedios):.2f} | Nota mínima: {min(promedios):.2f}\n"
-            texto += f"Nota minima: {min(promedios):.2f}\n"
+            
+            texto += f"PROMEDIO GENERAL: {statistics.mean(promedios):.2f} / 100\n"
+            texto += f"Nota máxima: {max(promedios):.2f}\n"
+            texto += f"Nota mínima: {min(promedios):.2f}\n"
             texto += f"Mediana: {statistics.median(promedios):.2f}\n"
-            texto += f"Desviacion estandar: {statistics.stdev(promedios) if len(promedios) > 1 else 0:.2f}\n\n"
+            texto += f"Desviación estándar: {statistics.stdev(promedios) if len(promedios) > 1 else 0:.2f}\n\n"
+            
             rangos = {'0-59': 0, '60-69': 0, '70-79': 0, '80-89': 0, '90-100': 0}
             for p in promedios:
                 if p < 60: rangos['0-59'] += 1
@@ -1680,12 +1779,16 @@ class GestorNotasApp(CTk):
                 elif p < 80: rangos['70-79'] += 1
                 elif p < 90: rangos['80-89'] += 1
                 else: rangos['90-100'] += 1
-            texto += "DISTRIBUCION DE NOTAS:\n"
+            
+            texto += "DISTRIBUCIÓN DE NOTAS\n"
+            texto += f"{'─' * 50}\n"
             for r, c in rangos.items():
-                barra = "*" * int(c / len(promedios) * 30) if promedios else ""
-                texto += f"{r}: {barra} {c} est.\n"
+                porcentaje = (c / len(promedios) * 100) if promedios else 0
+                barra = "█" * int(porcentaje / 5)
+                texto += f"{r:>6}: {barra:<20} {c:>3} est. ({porcentaje:.1f}%)\n"
         else:
-            texto += "Agrega evaluaciones y estudiantes para ver estadisticas.\n"
+            texto += "Agregue evaluaciones y estudiantes para ver estadísticas.\n"
+        
         self.resumen_text.configure(state="normal")
         self.resumen_text.delete("0.0", "end")
         self.resumen_text.insert("0.0", texto)
@@ -1735,305 +1838,458 @@ class GestorNotasApp(CTk):
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo exportar:\n{str(e)}")
 
-
     def setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
         
-        # ========== SIDEBAR ==========
-        self.sidebar = CTkFrame(self, width=400, corner_radius=0)  
+        self.sidebar = CTkFrame(self, width=320, corner_radius=0, 
+                               fg_color=COLORES["primario"])
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_rowconfigure(0, weight=1)
+        self.sidebar.grid_propagate(False)
         
-        self.sidebar_scroll = CTkScrollableFrame(self.sidebar, width=380, height=800) 
-        self.sidebar_scroll.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.sidebar_scroll = CTkScrollableFrame(self.sidebar, width=300, 
+                                                fg_color="transparent",
+                                                scrollbar_button_color=COLORES["secundario"])
+        self.sidebar_scroll.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
         
-        self.title_label = CTkLabel(self.sidebar_scroll, text="Gestor de Notas", font=ctk.CTkFont(size=20, weight="bold"))
-        self.title_label.pack(pady=(0, 10))
+        self.title_label = CTkLabel(self.sidebar_scroll, 
+                                   text="GESTOR DE EVALUACIONES",
+                                   font=self.FUENTES["titulo"],
+                                   text_color="white")
+        self.title_label.pack(pady=(0, 20))
         
-        # --- Frame de Cursos ---
-        self.cursos_frame = CTkFrame(self.sidebar_scroll)
-        self.cursos_frame.pack(fill="x", pady=5)
+        separador = CTkFrame(self.sidebar_scroll, height=2, fg_color=COLORES["acento"])
+        separador.pack(fill="x", pady=(0, 15))
         
-        CTkLabel(self.cursos_frame, text="Cursos", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        self.cursos_frame = CTkFrame(self.sidebar_scroll, fg_color=COLORES["secundario"],
+                                    corner_radius=8)
+        self.cursos_frame.pack(fill="x", pady=8)
         
-        self.cursos_scroll = CTkScrollableFrame(self.cursos_frame, height=100)
-        self.cursos_scroll.pack(fill="x", padx=5, pady=5)
+        header_cursos = CTkFrame(self.cursos_frame, fg_color="transparent")
+        header_cursos.pack(fill="x", padx=12, pady=(10, 5))
+        
+        CTkLabel(header_cursos, text="CURSOS", 
+                font=self.FUENTES["subtitulo"],
+                text_color="white").pack(side="left")
+        
+        CTkLabel(header_cursos, text=str(len(self.cursos_data)) if hasattr(self, 'cursos_data') else "0",
+                font=self.FUENTES["pequeña"],
+                text_color=COLORES["texto_secundario"]).pack(side="right")
+        
+        self.cursos_scroll = CTkScrollableFrame(self.cursos_frame, height=120,
+                                               fg_color=COLORES["primario"],
+                                               corner_radius=6)
+        self.cursos_scroll.pack(fill="x", padx=10, pady=5)
         
         btn_frame = CTkFrame(self.cursos_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=5, pady=5)
-        CTkButton(btn_frame, text="Nuevo", width=80, command=self.crear_curso).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="Editar", width=80, command=self.editar_curso).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="X", width=50, command=self.eliminar_curso, fg_color="red", hover_color="darkred").pack(side="left", padx=2)
+        btn_frame.pack(fill="x", padx=10, pady=(5, 10))
         
-        # --- Frame de Evaluaciones ---
-        self.evals_frame = CTkFrame(self.sidebar_scroll)
-        self.evals_frame.pack(fill="x", pady=5)
+        CTkButton(btn_frame, text="Nuevo", width=70, 
+                 command=self.crear_curso,
+                 fg_color=COLORES["acento"],
+                 hover_color="#2980B9",
+                 font=self.FUENTES["boton"],
+                 height=32).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="Editar", width=70, 
+                 command=self.editar_curso,
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 font=self.FUENTES["boton"],
+                 height=32).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="Eliminar", width=60, 
+                 command=self.eliminar_curso, 
+                 fg_color=COLORES["peligro"],
+                 hover_color="#A93226",
+                 font=self.FUENTES["boton"],
+                 height=32).pack(side="left", padx=2)
         
-        CTkLabel(self.evals_frame, text="Evaluaciones", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        self.evals_frame = CTkFrame(self.sidebar_scroll, fg_color=COLORES["secundario"],
+                                   corner_radius=8)
+        self.evals_frame.pack(fill="x", pady=8)
         
-        self.evals_scroll = CTkScrollableFrame(self.evals_frame, height=100)
-        self.evals_scroll.pack(fill="x", padx=5, pady=5)
+        header_evals = CTkFrame(self.evals_frame, fg_color="transparent")
+        header_evals.pack(fill="x", padx=12, pady=(10, 5))
+        
+        CTkLabel(header_evals, text="EVALUACIONES", 
+                font=self.FUENTES["subtitulo"],
+                text_color="white").pack(side="left")
+        
+        self.evals_scroll = CTkScrollableFrame(self.evals_frame, height=120,
+                                              fg_color=COLORES["primario"],
+                                              corner_radius=6)
+        self.evals_scroll.pack(fill="x", padx=10, pady=5)
         
         btn_frame = CTkFrame(self.evals_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=5, pady=5)
-        CTkButton(btn_frame, text="Nuevo", width=60, command=self.agregar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="Editar", width=60, command=self.editar_evaluacion).pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="Rubrica", width=60, command=self.editar_rubrica, fg_color="purple", hover_color="darkpurple").pack(side="left", padx=2, fill="x", expand=True)
-        CTkButton(btn_frame, text="X", width=40, command=self.eliminar_evaluacion, fg_color="orange", hover_color="darkorange").pack(side="left", padx=2)
+        btn_frame.pack(fill="x", padx=10, pady=(5, 10))
         
-        # --- Frame de Estudiantes ---
-        self.est_frame = CTkFrame(self.sidebar_scroll)
-        self.est_frame.pack(fill="x", pady=5)
+        CTkButton(btn_frame, text="Nueva", width=55, 
+                 command=self.agregar_evaluacion,
+                 fg_color=COLORES["acento"],
+                 hover_color="#2980B9",
+                 font=self.FUENTES["boton"],
+                 height=32).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="Editar", width=55, 
+                 command=self.editar_evaluacion,
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 font=self.FUENTES["boton"],
+                 height=32).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="Rúbrica", width=55, 
+                 command=self.editar_rubrica, 
+                 fg_color="#8E44AD",
+                 hover_color="#7D3C98",
+                 font=self.FUENTES["boton"],
+                 height=32).pack(side="left", padx=2, fill="x", expand=True)
+        CTkButton(btn_frame, text="X", width=40, 
+                 command=self.eliminar_evaluacion, 
+                 fg_color=COLORES["alerta"],
+                 hover_color="#D35400",
+                 font=self.FUENTES["boton"],
+                 height=32).pack(side="left", padx=2)
         
-        CTkLabel(self.est_frame, text="Estudiantes", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        self.est_frame = CTkFrame(self.sidebar_scroll, fg_color=COLORES["secundario"],
+                                 corner_radius=8)
+        self.est_frame.pack(fill="x", pady=8)
         
-        CTkButton(self.est_frame, text="Agregar Estudiante", command=self.agregar_estudiante).pack(pady=2, fill="x", padx=5)
-        CTkButton(self.est_frame, text="Agregar Varios", command=self.agregar_varios_estudiantes).pack(pady=2, fill="x", padx=5)
+        CTkLabel(self.est_frame, text="ESTUDIANTES", 
+                font=self.FUENTES["subtitulo"],
+                text_color="white").pack(pady=(10, 5))
+        
+        CTkButton(self.est_frame, text="Agregar Estudiante", 
+                 command=self.agregar_estudiante,
+                 fg_color=COLORES["acento"],
+                 hover_color="#2980B9",
+                 font=self.FUENTES["boton"],
+                 height=35).pack(pady=3, fill="x", padx=10)
+        CTkButton(self.est_frame, text="Agregar Varios", 
+                 command=self.agregar_varios_estudiantes,
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 font=self.FUENTES["boton"],
+                 height=32).pack(pady=2, fill="x", padx=10)
         
         btn_frame = CTkFrame(self.est_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=5, pady=2)
-        CTkButton(btn_frame, text="Editar", command=self.editar_estudiante).pack(side="left", fill="x", expand=True, padx=2)
-        CTkButton(btn_frame, text="Eliminar", command=self.eliminar_estudiante, fg_color="red", hover_color="darkred").pack(side="left", fill="x", expand=True, padx=2)
+        btn_frame.pack(fill="x", padx=10, pady=(5, 10))
+        CTkButton(btn_frame, text="Editar", 
+                 command=self.editar_estudiante,
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 font=self.FUENTES["boton"],
+                 height=32).pack(side="left", fill="x", expand=True, padx=2)
+        CTkButton(btn_frame, text="Eliminar", 
+                 command=self.eliminar_estudiante, 
+                 fg_color=COLORES["peligro"],
+                 hover_color="#A93226",
+                 font=self.FUENTES["boton"],
+                 height=32).pack(side="left", fill="x", expand=True, padx=2)
         
-       # --- Frame de Herramientas ---
-        self.tools_frame = CTkFrame(self.sidebar_scroll)
-        self.tools_frame.pack(fill="x", pady=5)
+        self.tools_frame = CTkFrame(self.sidebar_scroll, fg_color=COLORES["secundario"],
+                                   corner_radius=8)
+        self.tools_frame.pack(fill="x", pady=8)
         
-        CTkLabel(self.tools_frame, text="Herramientas", font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        CTkLabel(self.tools_frame, text="HERRAMIENTAS", 
+                font=self.FUENTES["subtitulo"],
+                text_color="white").pack(pady=(10, 5))
         
-        CTkButton(self.tools_frame, text="Exportar a Excel", command=self.exportar_excel).pack(pady=2, fill="x", padx=5)
-        # NUEVO: Sincronizacion por archivo compartido
-        CTkButton(self.tools_frame, text="Sincronizar datos", 
+        CTkButton(self.tools_frame, text="Exportar a Excel", 
+                 command=self.exportar_excel,
+                 fg_color="#16A085",
+                 hover_color="#138D75",
+                 font=self.FUENTES["boton"],
+                 height=35).pack(pady=3, fill="x", padx=10)
+        CTkButton(self.tools_frame, text="Sincronizar Datos", 
                  command=self.sincronizar_manual, 
-                 fg_color="green", hover_color="darkgreen").pack(pady=2, fill="x", padx=10)
+                 fg_color=COLORES["exito"],
+                 hover_color="#219A52",
+                 font=self.FUENTES["boton"],
+                 height=35).pack(pady=3, fill="x", padx=10)
         
-        # --- Label de Estado ---
-        self.status_label = CTkLabel(self.sidebar_scroll, text="Estado: Listo", font=ctk.CTkFont(size=12))
-        self.status_label.pack(pady=10)
+        self.status_frame = CTkFrame(self.sidebar_scroll, fg_color="transparent")
+        self.status_frame.pack(fill="x", pady=15)
         
-        # ========== MAIN FRAME ==========
-        self.main_frame = CTkFrame(self)
-        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        self.status_label = CTkLabel(self.status_frame, 
+                                    text="Sistema Listo",
+                                    font=self.FUENTES["pequeña"],
+                                    text_color=COLORES["texto_secundario"])
+        self.status_label.pack()
+        
+        self.main_frame = CTkFrame(self, fg_color=COLORES["fondo"])
+        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=0, pady=0)
         self.main_frame.grid_columnconfigure(0, weight=1)
         self.main_frame.grid_rowconfigure(0, weight=1)
         
-        # --- Tabview ---
-        self.tabview = CTkTabview(self.main_frame)
-        self.tabview.grid(row=0, column=0, sticky="nsew")
+        self.tabview = CTkTabview(self.main_frame,
+                                 fg_color=COLORES["tarjeta"],
+                                 segmented_button_fg_color=COLORES["secundario"],
+                                 segmented_button_selected_color=COLORES["acento"],
+                                 segmented_button_selected_hover_color="#2980B9",
+                                 segmented_button_unselected_color=COLORES["secundario"],
+                                 segmented_button_unselected_hover_color=COLORES["primario"],
+                                 text_color="white")
+        self.tabview.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
         
         self.tab_notas = self.tabview.add("Registro de Notas")
         self.tab_clases = self.tabview.add("Control de Clases")
-        self.tab_config = self.tabview.add("Configuracion del Curso")
-        self.tab_resumen = self.tabview.add("Resumen y Estadisticas")
+        self.tab_config = self.tabview.add("Configuración")
+        self.tab_resumen = self.tabview.add("Resumen")
         
         self.setup_tab_notas()
         self.setup_tab_clases()
         self.setup_tab_config()
         self.setup_tab_resumen()
 
-
     def setup_tab_clases(self):
-        """Configura la pestaña de Control de Clases con scroll"""
         self.tab_clases.grid_columnconfigure(0, weight=3)
         self.tab_clases.grid_columnconfigure(1, weight=1)
         self.tab_clases.grid_rowconfigure(0, weight=1)
+        self.tab_clases.configure(fg_color=COLORES["tarjeta"])
         
-        # FRAME SCROLLABLE PRINCIPAL para todo el contenido
-        scroll_principal = CTkScrollableFrame(self.tab_clases)
-        scroll_principal.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        scroll_principal = CTkScrollableFrame(self.tab_clases,
+                                             fg_color="transparent")
+        scroll_principal.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
         scroll_principal.grid_columnconfigure(0, weight=1)
         
-        # ========== CONTENIDO DE LA CLASE ==========
-        self.clases_content_frame = CTkFrame(scroll_principal)
+        self.clases_content_frame = CTkFrame(scroll_principal,
+                                            fg_color=COLORES["fondo"],
+                                            corner_radius=10)
         self.clases_content_frame.pack(fill="x", padx=5, pady=5)
         self.clases_content_frame.grid_columnconfigure(0, weight=1)
         
-        # --- Fecha de la clase (selector discreto) ---
-        fecha_row = CTkFrame(self.clases_content_frame, fg_color="transparent")
-        fecha_row.pack(fill="x", padx=10, pady=(10, 5))
+        toolbar = CTkFrame(self.clases_content_frame, 
+                          fg_color=COLORES["primario"],
+                          corner_radius=6)
+        toolbar.pack(fill="x", padx=10, pady=(10, 20))
         
-        CTkLabel(fecha_row, text="📅 Fecha:", 
-                font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0, 10))
+        fecha_container = CTkFrame(toolbar, fg_color="transparent")
+        fecha_container.pack(side="left", padx=15, pady=10)
         
-        # Variable para almacenar la fecha (formato DD/MM/AAAA)
+        CTkLabel(fecha_container, text="FECHA:", 
+                font=self.FUENTES["boton"],
+                text_color="white").pack(side="left", padx=(0, 10))
+        
         self.fecha_clase_var = ctk.StringVar(value=date.today().strftime("%d/%m/%Y"))
         
-        # Botón que muestra la fecha y abre el calendario
-        self.btn_fecha_clase = CTkButton(fecha_row, 
+        self.btn_fecha_clase = CTkButton(fecha_container, 
                                         text=self.fecha_clase_var.get(),
-                                        width=120,
-                                        height=32,
+                                        width=100,
+                                        height=30,
                                         command=self.abrir_selector_fecha,
-                                        fg_color="blue",
-                                        hover_color="darkblue",
-                                        font=ctk.CTkFont(size=12))
+                                        fg_color=COLORES["acento"],
+                                        hover_color="#2980B9",
+                                        font=self.FUENTES["boton"])
         self.btn_fecha_clase.pack(side="left")
         
-        # Botón para ir a "hoy" - FUNCIÓN DEFINIDA ANTES DE USARLA
         def poner_fecha_hoy():
             hoy = date.today().strftime("%d/%m/%Y")
             self.fecha_clase_var.set(hoy)
             self.btn_fecha_clase.configure(text=hoy)
-
-        CTkButton(fecha_row, text="Hoy", width=60, height=32,
-                command=poner_fecha_hoy,
-                fg_color="gray").pack(side="left", padx=5)
         
-        # --- Selector de Grupo ---
-        grupo_row = CTkFrame(self.clases_content_frame, fg_color="transparent")
-        grupo_row.pack(fill="x", padx=10, pady=(5, 10))
+        CTkButton(fecha_container, text="Hoy", width=50, height=30,
+                 command=poner_fecha_hoy,
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 font=self.FUENTES["boton"]).pack(side="left", padx=8)
         
-        CTkLabel(grupo_row, text="👥 Grupo:", 
-                font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0, 10))
+        grupo_container = CTkFrame(toolbar, fg_color="transparent")
+        grupo_container.pack(side="left", padx=15, pady=10)
+        
+        CTkLabel(grupo_container, text="GRUPO:", 
+                font=self.FUENTES["boton"],
+                text_color="white").pack(side="left", padx=(0, 10))
         
         self.grupo_clase_var = ctk.StringVar(value="1")
         def cambiar_grupo(nuevo_grupo):
-            self.lbl_info_grupo_clase.configure(text=f"Clases para Grupo {nuevo_grupo}")
-            self.cargar_lista_clases()  # Recargar lista filtrada por grupo
+            self.lbl_info_grupo_clase.configure(text=f"Clases del Grupo {nuevo_grupo}")
+            self.cargar_lista_clases()
 
-        self.combo_grupo_clase = CTkOptionMenu(grupo_row, 
-                                            values=["1", "2", "3", "4", "5"],
-                                            variable=self.grupo_clase_var,
-                                            width=80,
-                                            command=cambiar_grupo)
+        self.combo_grupo_clase = CTkOptionMenu(grupo_container, 
+                                              values=["1", "2", "3", "4", "5"],
+                                              variable=self.grupo_clase_var,
+                                              width=70,
+                                              command=cambiar_grupo,
+                                              fg_color=COLORES["acento"],
+                                              button_color="#2980B9",
+                                              text_color="white",
+                                              font=self.FUENTES["boton"])
         self.combo_grupo_clase.pack(side="left")
         
-        # Label que muestra info del grupo
-        self.lbl_info_grupo_clase = CTkLabel(grupo_row, 
-                                            text="Clases para Grupo 1",
-                                            font=ctk.CTkFont(size=11),
-                                            text_color="gray")
-        self.lbl_info_grupo_clase.pack(side="left", padx=15)
+        self.lbl_info_grupo_clase = CTkLabel(toolbar, 
+                                            text="Clases del Grupo 1",
+                                            font=self.FUENTES["normal"],
+                                            text_color=COLORES["texto_secundario"])
+        self.lbl_info_grupo_clase.pack(side="right", padx=15)
         
-        # --- Encabezado de la clase ---
-        CTkLabel(self.clases_content_frame, text="Título de la Clase:", 
-                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        CTkLabel(self.clases_content_frame, text="TÍTULO DE LA CLASE", 
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(pady=(15, 5), padx=15, anchor="w")
         
         self.entry_encabezado_clase = CTkEntry(self.clases_content_frame, 
-                                               placeholder_text="Ej: Clase 1 - Introducción al curso",
-                                               height=35, font=ctk.CTkFont(size=14))
-        self.entry_encabezado_clase.pack(fill="x", padx=10, pady=5)
+                                               placeholder_text="Ej: Introducción al curso - Conceptos fundamentales",
+                                               height=40,
+                                               font=self.FUENTES["normal"],
+                                               fg_color=COLORES["tarjeta"],
+                                               text_color=COLORES["texto"],
+                                               border_color=COLORES["borde"])
+        self.entry_encabezado_clase.pack(fill="x", padx=15, pady=5)
         
-        # --- Tópicos por tratar ---
-        CTkLabel(self.clases_content_frame, text="Topicos que se trataran:", 
-                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        CTkLabel(self.clases_content_frame, text="TÓPICOS", 
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(pady=(15, 5), padx=15, anchor="w")
         
         self.entry_topicos = CTkEntry(self.clases_content_frame, 
-                                     placeholder_text="Ej: 1. Presentacion del curso, 2. Conceptos basicos, 3. Dinamica grupal...",
-                                     height=35)
-        self.entry_topicos.pack(fill="x", padx=10, pady=5)
+                                     placeholder_text="1. Presentación, 2. Objetivos, 3. Metodología...",
+                                     height=35,
+                                     font=self.FUENTES["normal"],
+                                     fg_color=COLORES["tarjeta"],
+                                     text_color=COLORES["texto"],
+                                     border_color=COLORES["borde"])
+        self.entry_topicos.pack(fill="x", padx=15, pady=5)
         
-        # --- Enlaces de lecturas ---
-        CTkLabel(self.clases_content_frame, text="Enlaces de Lecturas Asignadas:", 
-                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        CTkLabel(self.clases_content_frame, text="LECTURAS Y RECURSOS", 
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(pady=(15, 5), padx=15, anchor="w")
         
-        self.frame_links = CTkFrame(self.clases_content_frame)
-        self.frame_links.pack(fill="x", padx=10, pady=5)
+        self.frame_links = CTkFrame(self.clases_content_frame,
+                                   fg_color=COLORES["tarjeta"],
+                                   corner_radius=6)
+        self.frame_links.pack(fill="x", padx=15, pady=5)
         
         self.links_entries = []
         
-        CTkButton(self.clases_content_frame, text="Agregar Enlace", 
-                 command=self.agregar_campo_link, fg_color="blue").pack(pady=5, padx=10, anchor="w")
+        CTkButton(self.clases_content_frame, text="+ Agregar Recurso", 
+                 command=self.agregar_campo_link,
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 font=self.FUENTES["boton"],
+                 height=32).pack(pady=5, padx=15, anchor="w")
         
         self.agregar_campo_link()
         
-        # --- Contenido/Notas de la clase ---
-        CTkLabel(self.clases_content_frame, text="Desarrollo de la Clase (Notas):", 
-                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        CTkLabel(self.clases_content_frame, text="DESARROLLO DE LA CLASE", 
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(pady=(15, 5), padx=15, anchor="w")
         
-        toolbar_frame = CTkFrame(self.clases_content_frame, fg_color="transparent")
-        toolbar_frame.pack(fill="x", padx=10, pady=2)
+        toolbar_frame = CTkFrame(self.clases_content_frame, 
+                                fg_color=COLORES["secundario"],
+                                corner_radius=4)
+        toolbar_frame.pack(fill="x", padx=15, pady=2)
         
-        CTkButton(toolbar_frame, text="Negrita", width=80, 
-                 command=lambda: self.aplicar_formato_texto("bold")).pack(side="left", padx=2)
-        CTkButton(toolbar_frame, text="Cursiva", width=80, 
-                 command=lambda: self.aplicar_formato_texto("italic")).pack(side="left", padx=2)
-        CTkButton(toolbar_frame, text="Subrayado", width=80, 
-                 command=lambda: self.aplicar_formato_texto("underline")).pack(side="left", padx=2)
+        CTkButton(toolbar_frame, text="B", width=40, 
+                 command=lambda: self.aplicar_formato_texto("bold"),
+                 fg_color="transparent",
+                 font=ctk.CTkFont(family="Helvetica", size=12, weight="bold")).pack(side="left", padx=2, pady=4)
+        CTkButton(toolbar_frame, text="I", width=40, 
+                 command=lambda: self.aplicar_formato_texto("italic"),
+                 fg_color="transparent",
+                 font=ctk.CTkFont(family="Helvetica", size=12, slant="italic")).pack(side="left", padx=2, pady=4)
+        CTkButton(toolbar_frame, text="U", width=40, 
+                 command=lambda: self.aplicar_formato_texto("underline"),
+                 fg_color="transparent",
+                 font=ctk.CTkFont(family="Helvetica", size=12, underline=True)).pack(side="left", padx=2, pady=4)
         
-        # Frame contenedor para el Text nativo con scrollbar
-        text_container = CTkFrame(self.clases_content_frame)
-        text_container.pack(fill="x", padx=10, pady=5)
-        text_container.grid_columnconfigure(0, weight=1)
-        text_container.grid_rowconfigure(0, weight=1)
+        text_container = CTkFrame(self.clases_content_frame,
+                                 fg_color=COLORES["tarjeta"],
+                                 corner_radius=6)
+        text_container.pack(fill="x", padx=15, pady=5)
         
-        # Usar Text nativo de tkinter que soporta tags de formato
         self.texto_clase = tk.Text(text_container, wrap="word", 
-                                  font=("Segoe UI", 12), 
-                                  height=15,
-                                  bg="#2b2b2b",
-                                  fg="white",
-                                  insertbackground="white",
+                                  font=("Consolas", 11), 
+                                  height=12,
+                                  bg="#FFFFFF",
+                                  fg=COLORES["texto"],
+                                  insertbackground=COLORES["primario"],
                                   relief="flat",
-                                  borderwidth=0)
-        self.texto_clase.grid(row=0, column=0, sticky="nsew")
+                                  borderwidth=0,
+                                  padx=10,
+                                  pady=10)
+        self.texto_clase.pack(fill="both", expand=True, padx=2, pady=2)
         
-        # Scrollbar personalizada
-        scrollbar = ctk.CTkScrollbar(text_container, command=self.texto_clase.yview)
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        self.texto_clase.configure(yscrollcommand=scrollbar.set)
-        
-        # --- Observaciones/Recordatorios ---
-        CTkLabel(self.clases_content_frame, text="Observaciones / Recordatorios:", 
-                font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5), padx=10, anchor="w")
+        CTkLabel(self.clases_content_frame, text="OBSERVACIONES", 
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(pady=(15, 5), padx=15, anchor="w")
         
         self.entry_observaciones = CTkEntry(self.clases_content_frame, 
-                                           placeholder_text="Ej: Traer material para proxima clase, recordar tarea, etc.",
-                                           height=50)
-        self.entry_observaciones.pack(fill="x", padx=10, pady=5)
+                                           placeholder_text="Recordatorios, tareas pendientes, materiales necesarios...",
+                                           height=50,
+                                           font=self.FUENTES["normal"],
+                                           fg_color=COLORES["tarjeta"],
+                                           text_color=COLORES["texto"],
+                                           border_color=COLORES["borde"])
+        self.entry_observaciones.pack(fill="x", padx=15, pady=5)
         
-        # --- Botones de guardar y exportar ---
         btn_frame = CTkFrame(self.clases_content_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=10, pady=15)
+        btn_frame.pack(fill="x", padx=15, pady=20)
         
-        CTkButton(btn_frame, text="Guardar Clase", command=self.guardar_clase,
-                 fg_color="green", height=40).pack(side="left", padx=5, fill="x", expand=True)
-        CTkButton(btn_frame, text="Exportar esta clase a PDF", command=self.exportar_clase_pdf,
-                 fg_color="blue", height=40).pack(side="left", padx=5, fill="x", expand=True)
-        CTkButton(btn_frame, text="Exportar TODAS las clases", command=self.exportar_todas_clases_pdf,
-                 fg_color="purple", height=40).pack(side="left", padx=5, fill="x", expand=True)
+        CTkButton(btn_frame, text="Guardar Clase", 
+                 command=self.guardar_clase,
+                 fg_color=COLORES["exito"],
+                 hover_color="#219A52",
+                 height=45,
+                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
+        CTkButton(btn_frame, text="Exportar PDF", 
+                 command=self.exportar_clase_pdf,
+                 fg_color=COLORES["acento"],
+                 hover_color="#2980B9",
+                 height=45,
+                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
+        CTkButton(btn_frame, text="Exportar Todas", 
+                 command=self.exportar_todas_clases_pdf,
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 height=45,
+                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
         
-        # ========== PANEL DERECHO: Herramientas ==========
-        self.clases_tools_frame = CTkFrame(self.tab_clases)
-        self.clases_tools_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        self.clases_tools_frame = CTkFrame(self.tab_clases,
+                                          fg_color=COLORES["fondo"],
+                                          corner_radius=10)
+        self.clases_tools_frame.grid(row=0, column=1, sticky="nsew", padx=(0, 15), pady=15)
         
-        # --- Selector de clase existente ---
-        CTkLabel(self.clases_tools_frame, text="Clases Guardadas", 
-                font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5), padx=10)
+        CTkLabel(self.clases_tools_frame, text="CLASES GUARDADAS", 
+                font=self.FUENTES["subtitulo"],
+                text_color=COLORES["texto"]).pack(pady=(15, 10), padx=10)
         
         self.combo_clases_guardadas = CTkOptionMenu(self.clases_tools_frame, 
                                                     values=["-- Nueva Clase --"],
-                                                    command=self.cargar_clase_guardada)
+                                                    command=self.cargar_clase_guardada,
+                                                    fg_color=COLORES["secundario"],
+                                                    button_color=COLORES["primario"],
+                                                    font=self.FUENTES["normal"])
         self.combo_clases_guardadas.pack(fill="x", padx=10, pady=5)
         
-        # Botón de actualizar lista
         CTkButton(self.clases_tools_frame, text="Actualizar Lista", 
-                 command=self.cargar_lista_clases, fg_color="gray").pack(pady=2, padx=10, fill="x")
+                 command=self.cargar_lista_clases,
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 font=self.FUENTES["boton"]).pack(pady=5, padx=10, fill="x")
         
-        CTkButton(self.clases_tools_frame, text="Eliminar Clase Seleccionada", 
-                 command=self.eliminar_clase_guardada, fg_color="red").pack(pady=5, padx=10, fill="x")
+        CTkButton(self.clases_tools_frame, text="Eliminar Seleccionada", 
+                 command=self.eliminar_clase_guardada,
+                 fg_color=COLORES["peligro"],
+                 hover_color="#A93226",
+                 font=self.FUENTES["boton"]).pack(pady=5, padx=10, fill="x")
         
-        CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
+        separador = CTkFrame(self.clases_tools_frame, height=2, 
+                            fg_color=COLORES["borde"])
+        separador.pack(fill="x", padx=10, pady=15)
         
-        # --- Botón de Asistencia ---
-        CTkLabel(self.clases_tools_frame, text="Control de Asistencia", 
-                font=ctk.CTkFont(weight="bold")).pack(pady=5, padx=10)
+        CTkLabel(self.clases_tools_frame, text="CONTROL DE ASISTENCIA", 
+                font=self.FUENTES["subtitulo"],
+                text_color=COLORES["texto"]).pack(pady=5, padx=10)
         
         CTkButton(self.clases_tools_frame, text="Registrar Asistencia", 
-                 command=self.abrir_asistencia, height=50, fg_color="orange",
-                 font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10, padx=10, fill="x")
+                 command=self.abrir_asistencia,
+                 height=50,
+                 fg_color=COLORES["alerta"],
+                 hover_color="#D35400",
+                 font=self.FUENTES["boton"]).pack(pady=10, padx=10, fill="x")
         
-        CTkFrame(self.clases_tools_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=15)
-        
-        
-        # --- Estado ---
         self.status_clases_label = CTkLabel(self.clases_tools_frame, 
-                                             text="Estado: Listo", 
-                                             font=ctk.CTkFont(size=12))
+                                           text="Sistema listo",
+                                           font=self.FUENTES["pequeña"],
+                                           text_color=COLORES["texto_secundario"])
         self.status_clases_label.pack(pady=20)
-                
-        # Bindings para guardado automático
+        
         self.entry_encabezado_clase.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
         self.entry_topicos.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
         self.entry_observaciones.bind("<FocusOut>", lambda e: self.guardar_clase_auto())
@@ -2047,16 +2303,48 @@ class GestorNotasApp(CTk):
             return 1  
 
     def agregar_campo_link(self):
-        frame_link = CTkFrame(self.frame_links)
-        frame_link.pack(fill="x", pady=2)
-        entry_nombre = CTkEntry(frame_link, placeholder_text="Nombre del documento/lectura", width=200)
-        entry_nombre.pack(side="left", padx=2)
-        entry_url = CTkEntry(frame_link, placeholder_text="https://...", width=300)
-        entry_url.pack(side="left", padx=2, fill="x", expand=True)
-        btn_abrir = CTkButton(frame_link, text="Abrir", width=60, command=lambda: self.abrir_link(entry_url.get()))
-        btn_abrir.pack(side="left", padx=2)
-        btn_eliminar = CTkButton(frame_link, text="X", width=30, fg_color="red", command=lambda: frame_link.destroy())
-        btn_eliminar.pack(side="left", padx=2)
+        frame_link = CTkFrame(self.frame_links,
+                             fg_color=COLORES["fondo"],
+                             corner_radius=4)
+        frame_link.pack(fill="x", pady=3)
+        
+        entry_nombre = CTkEntry(frame_link, 
+                               placeholder_text="Nombre del documento",
+                               width=180,
+                               font=self.FUENTES["pequeña"],
+                               fg_color=COLORES["tarjeta"],
+                               text_color=COLORES["texto"],
+                               border_color=COLORES["borde"])
+        
+        entry_url = CTkEntry(frame_link, 
+                            placeholder_text="https://...",
+                            width=250,
+                            font=self.FUENTES["pequeña"],
+                            fg_color=COLORES["tarjeta"],
+                            text_color=COLORES["texto"],
+                            border_color=COLORES["borde"])
+        entry_url.pack(side="left", padx=5, pady=5, fill="x", expand=True)
+        
+        btn_abrir = CTkButton(frame_link, 
+                             text="Abrir", 
+                             width=60,
+                             command=lambda: self.abrir_link(entry_url.get()),
+                             fg_color=COLORES["acento"],
+                             hover_color="#2980B9",
+                             font=self.FUENTES["pequeña"],
+                             height=28)
+        btn_abrir.pack(side="left", padx=2, pady=5)
+        
+        btn_eliminar = CTkButton(frame_link, 
+                                text="X", 
+                                width=30,
+                                command=lambda: frame_link.destroy(),
+                                fg_color=COLORES["peligro"],
+                                hover_color="#A93226",
+                                font=self.FUENTES["pequeña"],
+                                height=28)
+        btn_eliminar.pack(side="left", padx=5, pady=5)
+        
         self.links_entries.append((entry_nombre, entry_url))
 
     def abrir_link(self, url):
@@ -2069,15 +2357,12 @@ class GestorNotasApp(CTk):
     def aplicar_formato_texto(self, tipo):
         """Aplica formato de negrita, cursiva o subrayado al texto seleccionado"""
         try:
-            # Obtener rango de selección
             if self.texto_clase.tag_ranges("sel"):
                 inicio = self.texto_clase.index("sel.first")
                 fin = self.texto_clase.index("sel.last")
                 
-                # Configurar el tag si no existe
                 if tipo == "bold":
                     self.texto_clase.tag_configure("bold", font=("Segoe UI", 12, "bold"))
-                    # Toggle: si ya tiene el tag, quitarlo; si no, agregarlo
                     if "bold" in self.texto_clase.tag_names(inicio):
                         self.texto_clase.tag_remove("bold", inicio, fin)
                     else:
@@ -2098,7 +2383,6 @@ class GestorNotasApp(CTk):
                         self.texto_clase.tag_add("underline", inicio, fin)
                         
         except tk.TclError:
-            # No hay selección
             pass
 
     def guardar_clase_auto(self):
@@ -2112,7 +2396,6 @@ class GestorNotasApp(CTk):
                 messagebox.showwarning("Advertencia", "Selecciona un curso primero")
             return
         
-        # Obtener fecha del calendario
         fecha_clase = self.fecha_clase_var.get()
         grupo_clase = self.get_grupo_clase_actual()
         
@@ -2121,7 +2404,6 @@ class GestorNotasApp(CTk):
         observaciones = self.entry_observaciones.get().strip()
         contenido = self.texto_clase.get("1.0", "end").strip()
         
-        # Recopilar enlaces
         links = []
         for nombre_entry, url_entry in self.links_entries:
             try:
@@ -2133,14 +2415,12 @@ class GestorNotasApp(CTk):
             except:
                 pass
         
-        # Si no hay encabezado, usar uno por defecto con fecha
         if not encabezado:
             from datetime import datetime
             encabezado = f"Clase del {datetime.now().strftime('%d/%m/%Y')}"
             self.entry_encabezado_clase.delete(0, "end")
             self.entry_encabezado_clase.insert(0, encabezado)
         
-        # Determinar si es nueva clase o actualización
         es_nueva = not hasattr(self, 'clase_actual_id') or not self.clase_actual_id
         
         try:
@@ -2158,11 +2438,10 @@ class GestorNotasApp(CTk):
                     raise Exception(error)
                 self.clase_actual_id = clase_id
             else:
-                # Actualizar clase existente CON FECHA
                 success, error = self.db.actualizar_clase(
                     self.clase_actual_id,
                     encabezado=encabezado,
-                    grupo=grupo_clase,  # NUEVO
+                    grupo=grupo_clase,
                     topicos=topicos,
                     contenido=contenido,
                     observaciones=observaciones,
@@ -2170,10 +2449,8 @@ class GestorNotasApp(CTk):
                 )
                 if not success:
                     raise Exception(error)
-                # Eliminar enlaces antiguos y agregar nuevos
                 self.db.eliminar_links_clase(self.clase_actual_id)
             
-            # Guardar enlaces
             if self.clase_actual_id and links:
                 for link in links:
                     self.db.agregar_link_clase(self.clase_actual_id, link["nombre"], link["url"])
@@ -2189,7 +2466,6 @@ class GestorNotasApp(CTk):
 
     def cargar_lista_clases(self):
         """Carga la lista de clases desde la base de datos"""
-        # Si no hay curso seleccionado, limpiar el combo
         if not self.current_curso:
             valores = ["-- Nueva Clase --"]
             self.clases_dict = {"-- Nueva Clase --": None}
@@ -2198,22 +2474,18 @@ class GestorNotasApp(CTk):
                 self.combo_clases_guardadas.set("-- Nueva Clase --")
             return
         
-        # Obtener clases del grupo seleccionado
         grupo_actual = self.get_grupo_clase_actual()
         clases_db = self.db.get_clases(self.current_curso, grupo=grupo_actual)
         
-        # INICIALIZAR variables antes del bucle
         valores = ["-- Nueva Clase --"]
         self.clases_dict = {"-- Nueva Clase --": None}
         
         for clase in clases_db:
-            # clase = (id, grupo, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion)
             clase_id = clase[0]
             grupo = clase[1]
             encabezado = clase[2]
             fecha_clase = clase[6]
             
-            # Mostrar fecha y grupo junto al encabezado
             display = ""
             if fecha_clase:
                 display += f"[{fecha_clase}] "
@@ -2240,7 +2512,6 @@ class GestorNotasApp(CTk):
         if not clase_id:
             return
         
-        # Obtener datos de la base de datos
         clase_data = self.db.get_clase_por_id(clase_id)
         
         if not clase_data:
@@ -2249,10 +2520,7 @@ class GestorNotasApp(CTk):
         
         self.clase_actual_id = clase_id
         
-        # Cargar campos de forma segura
         try:
-
-            # Cargar grupo en el selector
             grupo_guardado = clase_data.get("grupo", 1)
             self.grupo_clase_var.set(str(grupo_guardado))
             self.lbl_info_grupo_clase.configure(text=f"Clases para Grupo {grupo_guardado}")
@@ -2260,13 +2528,11 @@ class GestorNotasApp(CTk):
             self.entry_encabezado_clase.delete(0, "end")
             self.entry_encabezado_clase.insert(0, clase_data.get("encabezado", ""))
 
-            # Cargar fecha en el selector discreto
             fecha_guardada = clase_data.get("fecha_clase")
             if fecha_guardada:
                 self.fecha_clase_var.set(fecha_guardada)
                 self.btn_fecha_clase.configure(text=fecha_guardada)
             else:
-                # Si no hay fecha, poner hoy
                 hoy = date.today().strftime("%d/%m/%Y")
                 self.fecha_clase_var.set(hoy)
                 self.btn_fecha_clase.configure(text=hoy)
@@ -2283,7 +2549,6 @@ class GestorNotasApp(CTk):
             self.texto_clase.delete("1.0", "end")
             self.texto_clase.insert("1.0", clase_data.get("contenido", ""))
             
-            # Limpiar y recrear links
             for widget in self.frame_links.winfo_children():
                 widget.destroy()
             self.links_entries = []
@@ -2311,14 +2576,12 @@ class GestorNotasApp(CTk):
             messagebox.showerror("Error", "No se encontró el ID de la clase")
             return
         
-        # Confirmar eliminación
         if messagebox.askyesno("Confirmar", f"¿Eliminar permanentemente la clase '{seleccion}'?\n\nEsta acción no se puede deshacer."):
             try:
                 success, error = self.db.eliminar_clase(clase_id)
                 if success:
                     messagebox.showinfo("Éxito", "Clase eliminada correctamente")
                     self.status_clases_label.configure(text="Clase eliminada")
-                    # Limpiar campos y recargar lista
                     self.limpiar_campos_clase()
                     self.cargar_lista_clases()
                 else:
@@ -2333,20 +2596,17 @@ class GestorNotasApp(CTk):
         self.entry_observaciones.delete(0, "end")
         self.texto_clase.delete("1.0", "end")
 
-         # Resetear fecha a hoy
         hoy = date.today().strftime("%d/%m/%Y")
         self.fecha_clase_var.set(hoy)
         self.btn_fecha_clase.configure(text=hoy)
 
-        # Resetear grupo a 1
         self.grupo_clase_var.set("1")
         self.lbl_info_grupo_clase.configure(text="Clases para Grupo 1")
         
-        # Limpiar links
         for widget in self.frame_links.winfo_children():
             widget.destroy()
         self.links_entries = []
-        self.agregar_campo_link()  # Agregar al menos un campo vacío
+        self.agregar_campo_link()
         
         self.status_clases_label.configure(text="Nueva clase")
         self.clase_actual_id = None
@@ -2359,7 +2619,6 @@ class GestorNotasApp(CTk):
         popup.transient(self)
         popup.grab_set()
         
-        # Centrar
         popup.update_idletasks()
         x = (popup.winfo_screenwidth() // 2) - (300 // 2)
         y = (popup.winfo_screenheight() // 2) - (300 // 2)
@@ -2368,18 +2627,15 @@ class GestorNotasApp(CTk):
         CTkLabel(popup, text="Selecciona la fecha:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=10)
         
-        # Parsear fecha ACTUALMENTE SELECCIONADA (no la de hoy)
         from datetime import datetime
         try:
             fecha_str = self.fecha_clase_var.get()
             fecha_actual = datetime.strptime(fecha_str, "%d/%m/%Y")
             year, month, day = fecha_actual.year, fecha_actual.month, fecha_actual.day
         except:
-            # Si hay error, usar hoy
             hoy = date.today()
             year, month, day = hoy.year, hoy.month, hoy.day
         
-        # Calendario compacto
         cal = Calendar(popup, selectmode='day', 
                     year=year, month=month, day=day,
                     locale='es_ES', font="Arial 9",
@@ -2395,66 +2651,69 @@ class GestorNotasApp(CTk):
         CTkButton(popup, text="Seleccionar", command=seleccionar,
                 fg_color="green", height=35).pack(pady=10)
 
-
     def abrir_asistencia(self):
-        """Abre el diálogo de registro de asistencia con calendario"""
         if not self.current_curso:
-            messagebox.showwarning("Advertencia", "Selecciona un curso primero")
+            messagebox.showwarning("Advertencia", "Seleccione un curso primero")
             return
         
-        # Crear ventana de asistencia
         dialog = ctk.CTkToplevel(self)
         dialog.title("Registro de Asistencia")
         dialog.geometry("900x700")
         dialog.transient(self)
         dialog.grab_set()
         
-        # Centrar ventana
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - (900 // 2)
         y = (dialog.winfo_screenheight() // 2) - (700 // 2)
         dialog.geometry(f"900x700+{x}+{y}")
         
-        # Frame principal dividido en dos columnas
         dialog.grid_columnconfigure(0, weight=1)
         dialog.grid_columnconfigure(1, weight=2)
         dialog.grid_rowconfigure(0, weight=1)
         
-        # ========== PANEL IZQUIERDO: Calendario y controles ==========
-        left_frame = CTkFrame(dialog)
-        left_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        left_frame = CTkFrame(dialog,
+                             fg_color=COLORES["fondo"],
+                             corner_radius=10)
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
         left_frame.grid_rowconfigure(5, weight=1)
         
-        CTkLabel(left_frame, text="Control de Asistencia", 
-                font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
+        CTkLabel(left_frame, 
+                text="CONTROL DE ASISTENCIA",
+                font=self.FUENTES["subtitulo"],
+                text_color=COLORES["texto"]).pack(pady=(15, 5))
         
-        CTkLabel(left_frame, text="Seleccionar Fecha:", 
-                font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5))
+        CTkLabel(left_frame, 
+                text="Seleccionar Fecha:",
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(pady=(10, 5))
         
-        # ========== SELECTOR DE GRUPO ==========
         grupo_frame = CTkFrame(left_frame, fg_color="transparent")
         grupo_frame.pack(pady=10, fill="x", padx=10)
         
-        CTkLabel(grupo_frame, text="Grupo:", 
-                font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+        CTkLabel(grupo_frame, 
+                text="Grupo:",
+                font=self.FUENTES["boton"],
+                text_color=COLORES["texto"]).pack(side="left", padx=5)
         
-        # Usar el mismo grupo que está en Control de Clases
         self.grupo_asistencia_var = ctk.StringVar(value=self.grupo_clase_var.get())
         
         combo_grupo_asistencia = CTkOptionMenu(grupo_frame, 
-                                            values=["1", "2", "3", "4", "5"],
-                                            variable=self.grupo_asistencia_var,
-                                            width=80,
-                                            command=lambda x: [self.cargar_estudiantes_asistencia(cal.get_date()), self.guardar_asistencia_auto()])
+                                              values=["1", "2", "3", "4", "5"],
+                                              variable=self.grupo_asistencia_var,
+                                              width=80,
+                                              command=lambda x: [self.cargar_estudiantes_asistencia(cal.get_date()), self.guardar_asistencia_auto()],
+                                              fg_color=COLORES["secundario"],
+                                              button_color=COLORES["primario"],
+                                              text_color="white",
+                                              font=self.FUENTES["normal"])
         combo_grupo_asistencia.pack(side="left", padx=5)
         
-        CTkFrame(left_frame, height=2, fg_color="gray").pack(fill="x", padx=10, pady=5)
+        separador = CTkFrame(left_frame, height=2, fg_color=COLORES["borde"])
+        separador.pack(fill="x", padx=10, pady=10)
         
-        # Calendario visual - USAR FECHA DE CONTROL DE CLASES
-        cal_frame = CTkFrame(left_frame)
+        cal_frame = CTkFrame(left_frame, fg_color=COLORES["tarjeta"])
         cal_frame.pack(pady=5, padx=10)
         
-        # Parsear la fecha que está en Control de Clases
         from datetime import datetime
         try:
             fecha_inicial = datetime.strptime(self.fecha_clase_var.get(), "%d/%m/%Y")
@@ -2463,83 +2722,101 @@ class GestorNotasApp(CTk):
             hoy = date.today()
             year, month, day = hoy.year, hoy.month, hoy.day
         
-        cal = Calendar(cal_frame, selectmode='day', 
-                    year=year, month=month, day=day,
-                    locale='es_ES', font="Arial 10", 
-                    background='blue', foreground='white',
-                    selectbackground='red', selectforeground='yellow')
+        cal = Calendar(cal_frame, 
+                      selectmode='day', 
+                      year=year, 
+                      month=month, 
+                      day=day,
+                      locale='es_ES', 
+                      font="Arial 10",
+                      background=COLORES["primario"],
+                      foreground='white',
+                      selectbackground=COLORES["acento"],
+                      selectforeground='white')
         cal.pack(pady=5)
         
-        # Mostrar fecha seleccionada
-        fecha_label = CTkLabel(left_frame, text=f"Fecha: {cal.get_date()}", 
-                            font=ctk.CTkFont(size=14, weight="bold"))
+        fecha_label = CTkLabel(left_frame, 
+                              text=f"Fecha: {cal.get_date()}",
+                              font=self.FUENTES["normal"],
+                              text_color=COLORES["texto"])
         fecha_label.pack(pady=10)
         
-        # Botones de acción rápida
         btn_frame = CTkFrame(left_frame, fg_color="transparent")
         btn_frame.pack(pady=10, fill="x", padx=10)
         
-        CTkButton(btn_frame, text="✓ Todos Presentes", 
-                command=lambda: [self.marcar_todos_asistencia("presente"), self.guardar_asistencia_auto()],
-                fg_color="green", height=35).pack(pady=2, fill="x")
-        CTkButton(btn_frame, text="✗ Todos Ausentes", 
-                command=lambda: [self.marcar_todos_asistencia("ausente"), self.guardar_asistencia_auto()],
-                fg_color="red", height=35).pack(pady=2, fill="x")
-        CTkButton(btn_frame, text="Limpiar Todo", 
-                command=lambda: [self.marcar_todos_asistencia("sin_marcar"), self.guardar_asistencia_auto()],
-                fg_color="gray", height=35).pack(pady=2, fill="x")
+        CTkButton(btn_frame, 
+                 text="Todos Presentes",
+                 command=lambda: [self.marcar_todos_asistencia("presente"), self.guardar_asistencia_auto()],
+                 fg_color=COLORES["exito"],
+                 hover_color="#219A52",
+                 font=self.FUENTES["boton"],
+                 height=35).pack(pady=2, fill="x")
+        CTkButton(btn_frame, 
+                 text="Todos Ausentes",
+                 command=lambda: [self.marcar_todos_asistencia("ausente"), self.guardar_asistencia_auto()],
+                 fg_color=COLORES["peligro"],
+                 hover_color="#A93226",
+                 font=self.FUENTES["boton"],
+                 height=35).pack(pady=2, fill="x")
+        CTkButton(btn_frame, 
+                 text="Limpiar Todo",
+                 command=lambda: [self.marcar_todos_asistencia("sin_marcar"), self.guardar_asistencia_auto()],
+                 fg_color=COLORES["secundario"],
+                 hover_color=COLORES["primario"],
+                 font=self.FUENTES["boton"],
+                 height=35).pack(pady=2, fill="x")
         
-        # Botón cerrar (el guardado es automático)
-        CTkButton(left_frame, text="💾 Cerrar (Guardado automático)", 
-                command=lambda: [self.guardar_asistencia_auto(), dialog.destroy()],
-                fg_color="blue", height=50, 
-                font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20, fill="x", padx=10)
+        CTkButton(left_frame, 
+                 text="Cerrar (Guardado automático)",
+                 command=lambda: [self.guardar_asistencia_auto(), dialog.destroy()],
+                 fg_color=COLORES["acento"],
+                 hover_color="#2980B9",
+                 height=50,
+                 font=self.FUENTES["boton"]).pack(pady=20, fill="x", padx=10)
         
-        # Estadísticas del día
-        self.stats_label = CTkLabel(left_frame, text="Estadísticas: -", 
-                                font=ctk.CTkFont(size=12))
+        self.stats_label = CTkLabel(left_frame, 
+                                   text="Estadísticas: -",
+                                   font=self.FUENTES["normal"],
+                                   text_color=COLORES["texto_secundario"])
         self.stats_label.pack(pady=10)
         
-        # ========== PANEL DERECHO: Lista de estudiantes ==========
-        right_frame = CTkFrame(dialog)
-        right_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        right_frame = CTkFrame(dialog,
+                              fg_color=COLORES["tarjeta"],
+                              corner_radius=10)
+        right_frame.grid(row=0, column=1, sticky="nsew", padx=(0, 15), pady=15)
         right_frame.grid_rowconfigure(1, weight=1)
         
-        CTkLabel(right_frame, text="👥 Lista de Estudiantes", 
-                font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
+        CTkLabel(right_frame, 
+                text="LISTA DE ESTUDIANTES",
+                font=self.FUENTES["subtitulo"],
+                text_color=COLORES["texto"]).pack(pady=(15, 5))
         
-        CTkLabel(right_frame, text="Haz clic en el estado para cambiar (se guarda automáticamente)", 
-                font=ctk.CTkFont(size=11), text_color="gray").pack()
+        CTkLabel(right_frame, 
+                text="Haga clic en el estado para cambiar",
+                font=self.FUENTES["pequeña"],
+                text_color=COLORES["texto_secundario"]).pack()
         
-        # Scrollable frame para estudiantes
-        self.asistencia_scroll = CTkScrollableFrame(right_frame, 
-                                                label_text="Marcar asistencia",
-                                                height=550)
-        self.asistencia_scroll.pack(fill="both", expand=True, padx=10, pady=5)
+        self.asistencia_scroll = CTkScrollableFrame(right_frame,
+                                                   fg_color=COLORES["fondo"],
+                                                   height=550,
+                                                   corner_radius=6)
+        self.asistencia_scroll.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # Diccionario para almacenar las variables de estado
         self.checkboxes_asistencia = {}
         
-        # Variable para guardar referencia al calendario
         self.cal_asistencia = cal
         
-        # Cargar estudiantes inicialmente
         self.cargar_estudiantes_asistencia(cal.get_date())
         
-        # Actualizar al cambiar fecha en calendario
         def on_fecha_change(event=None):
-            # Guardar asistencia anterior antes de cambiar
             self.guardar_asistencia_auto()
-            # Cargar nueva fecha
             self.cargar_estudiantes_asistencia(cal.get_date())
             fecha_label.configure(text=f"Fecha: {cal.get_date()}")
-            # Sincronizar con Control de Clases
             self.fecha_clase_var.set(cal.get_date())
             self.btn_fecha_clase.configure(text=cal.get_date())
         
         cal.bind("<<CalendarSelected>>", on_fecha_change)
         
-        # Guardar al cerrar la ventana
         def on_closing():
             self.guardar_asistencia_auto()
             dialog.destroy()
@@ -2547,13 +2824,10 @@ class GestorNotasApp(CTk):
         dialog.protocol("WM_DELETE_WINDOW", on_closing)
 
     def cargar_estudiantes_asistencia(self, fecha_str):
-        """Carga la lista de estudiantes con toggle simple, mostrando datos guardados"""
-        # Limpiar frame anterior
         for widget in self.asistencia_scroll.winfo_children():
             widget.destroy()
         self.checkboxes_asistencia = {}
         
-        # Obtener estudiantes del GRUPO seleccionado
         try:
             grupo_asistencia = int(self.grupo_asistencia_var.get())
         except:
@@ -2564,21 +2838,30 @@ class GestorNotasApp(CTk):
         if not estudiantes:
             CTkLabel(self.asistencia_scroll, 
                     text=f"No hay estudiantes en el Grupo {grupo_asistencia}",
-                    font=ctk.CTkFont(size=14)).pack(pady=20)
+                    font=self.FUENTES["normal"],
+                    text_color=COLORES["texto_secundario"]).pack(pady=40)
             return
         
-        # Cargar asistencia previa del GRUPO y FECHA específicos
         asistencia_previa = self.db.get_asistencia_fecha(self.current_curso, grupo_asistencia, fecha_str)
         
-        # Header de columnas
-        header = CTkFrame(self.asistencia_scroll)
+        header = CTkFrame(self.asistencia_scroll,
+                         fg_color=COLORES["secundario"],
+                         corner_radius=4)
         header.pack(fill="x", padx=5, pady=5)
-        CTkLabel(header, text="Estudiante", font=ctk.CTkFont(weight="bold"), width=300).pack(side="left", padx=5)
-        CTkLabel(header, text="Estado (clic para cambiar)", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=20)
         
-        CTkFrame(self.asistencia_scroll, height=2, fg_color="gray").pack(fill="x", padx=5, pady=2)
+        CTkLabel(header, 
+                text="ESTUDIANTE",
+                font=self.FUENTES["boton"],
+                text_color="white",
+                width=300).pack(side="left", padx=10, pady=8)
+        CTkLabel(header, 
+                text="ESTADO",
+                font=self.FUENTES["boton"],
+                text_color="white").pack(side="left", padx=20)
         
-        # Función para actualizar estadísticas
+        separador = CTkFrame(self.asistencia_scroll, height=2, fg_color=COLORES["borde"])
+        separador.pack(fill="x", padx=5, pady=2)
+        
         def actualizar_stats():
             presentes = sum(1 for d in self.checkboxes_asistencia.values() if d['estado'] == "presente")
             ausentes = sum(1 for d in self.checkboxes_asistencia.values() if d['estado'] == "ausente")
@@ -2586,42 +2869,49 @@ class GestorNotasApp(CTk):
             
             if hasattr(self, 'stats_label'):
                 self.stats_label.configure(
-                    text=f"Presentes: {presentes} | Ausentes: {ausentes} | Total: {total}"
+                    text=f"Presentes: {presentes} | Ausentes: {ausentes} | Total: {total}",
+                    text_color=COLORES["texto"]
                 )
         
         self.actualizar_stats_asistencia = actualizar_stats
         
-        # Crear fila para cada estudiante
-        for est in estudiantes:
+        for idx, est in enumerate(estudiantes):
             est_id, nombre, grupo, email, carne = est
             est_id_str = str(est_id)
             
-            # Frame para cada estudiante
-            row = CTkFrame(self.asistencia_scroll)
-            row.pack(fill="x", pady=2, padx=5)
+            bg_color = COLORES["tarjeta"] if idx % 2 == 0 else COLORES["fondo"]
             
-            # Nombre del estudiante
+            row = CTkFrame(self.asistencia_scroll,
+                          fg_color=bg_color,
+                          corner_radius=4)
+            row.pack(fill="x", pady=1, padx=5)
+            
             nombre_text = f"{nombre}"
             if carne:
-                nombre_text += f" ({carne})"
+                nombre_text += f"  ({carne})"
             
-            lbl_nombre = CTkLabel(row, text=nombre_text, font=ctk.CTkFont(size=12), width=300)
-            lbl_nombre.pack(side="left", padx=5)
+            lbl_nombre = CTkLabel(row, 
+                                 text=nombre_text,
+                                 font=self.FUENTES["normal"],
+                                 text_color=COLORES["texto"],
+                                 width=300)
+            lbl_nombre.pack(side="left", padx=10, pady=8)
             
-            # Botón toggle - USA DATOS GUARDADOS si existen
             estado_inicial = asistencia_previa.get(est_id_str, "sin_marcar")
             
-            btn_toggle = CTkButton(row, text="SIN MARCAR", width=120, height=32,
-                                font=ctk.CTkFont(size=12, weight="bold"))
-            btn_toggle.pack(side="right", padx=10)
+            btn_toggle = CTkButton(row, 
+                                  text="SIN MARCAR",
+                                  width=110,
+                                  height=30,
+                                  font=self.FUENTES["boton"],
+                                  corner_radius=4)
+            btn_toggle.pack(side="right", padx=10, pady=5)
             
-            # Guardar referencia
             self.checkboxes_asistencia[est_id_str] = {
                 'estado': estado_inicial,
                 'boton': btn_toggle
             }
             
-            # Función para actualizar apariencia del botón
             def actualizar_boton(eid=est_id_str):
                 datos = self.checkboxes_asistencia[eid]
                 estado = datos['estado']
@@ -2629,30 +2919,27 @@ class GestorNotasApp(CTk):
                 
                 if estado == "presente":
                     boton.configure(
-                        text="PRESENTE ✓",
-                        fg_color="green",
-                        hover_color="darkgreen"
+                        text="PRESENTE",
+                        fg_color=COLORES["exito"],
+                        hover_color="#219A52"
                     )
                 elif estado == "ausente":
                     boton.configure(
-                        text="AUSENTE ✗",
-                        fg_color="red",
-                        hover_color="darkred"
+                        text="AUSENTE",
+                        fg_color=COLORES["peligro"],
+                        hover_color="#A93226"
                     )
                 else:
                     boton.configure(
                         text="SIN MARCAR",
-                        fg_color="gray",
-                        hover_color="darkgray"
+                        fg_color=COLORES["secundario"],
+                        hover_color=COLORES["primario"]
                     )
                 actualizar_stats()
-                # Guardar automáticamente al cambiar
                 self.guardar_asistencia_auto()
             
-            # Función para toggle
             def toggle_estado(eid=est_id_str):
                 datos = self.checkboxes_asistencia[eid]
-                # Ciclo: sin_marcar -> presente -> ausente -> sin_marcar
                 if datos['estado'] == "sin_marcar":
                     datos['estado'] = "presente"
                 elif datos['estado'] == "presente":
@@ -2661,13 +2948,9 @@ class GestorNotasApp(CTk):
                     datos['estado'] = "sin_marcar"
                 actualizar_boton(eid)
             
-            # Configurar comando
             btn_toggle.configure(command=lambda eid=est_id_str: toggle_estado(eid))
-            
-            # Aplicar estado inicial visual
             actualizar_boton(est_id_str)
         
-        # Actualizar estadísticas iniciales
         actualizar_stats()
 
     def marcar_todos_asistencia(self, estado):
@@ -2677,16 +2960,15 @@ class GestorNotasApp(CTk):
         
         for est_id, datos in self.checkboxes_asistencia.items():
             datos['estado'] = estado
-            # Actualizar botón
             if estado == "presente":
                 datos['boton'].configure(
-                    text="PRESENTE ✓",
+                    text="PRESENTE",
                     fg_color="green",
                     hover_color="darkgreen"
                 )
             elif estado == "ausente":
                 datos['boton'].configure(
-                    text="AUSENTE ✗",
+                    text="AUSENTE",
                     fg_color="red",
                     hover_color="darkred"
                 )
@@ -2697,11 +2979,9 @@ class GestorNotasApp(CTk):
                     hover_color="darkgray"
                 )
         
-        # Actualizar estadísticas
         if hasattr(self, 'actualizar_stats_asistencia'):
             self.actualizar_stats_asistencia()
         
-        # Guardar automáticamente
         self.guardar_asistencia_auto()
 
     def guardar_asistencia_db(self, fecha_str, dialog):
@@ -2710,28 +2990,22 @@ class GestorNotasApp(CTk):
             messagebox.showwarning("Advertencia", "No hay estudiantes para guardar")
             return
         
-        # Recopilar datos de TODOS los estudiantes (tanto presentes como ausentes)
         asistencia_data = {}
         for est_id, datos in self.checkboxes_asistencia.items():
             estado = datos['estado']
-            # Guardar tanto presentes como ausentes
             asistencia_data[est_id] = estado
         
         if not asistencia_data:
             messagebox.showwarning("Advertencia", "No hay estudiantes para guardar")
             return
         
-        # Obtener grupo y guardar en base de datos
         grupo_asistencia = int(self.grupo_asistencia_var.get())
         
-        # Primero eliminar registros existentes para esta fecha/grupo (para permitir cambios)
         success_del, error_del = self.db.eliminar_asistencia_fecha(self.current_curso, grupo_asistencia, fecha_str)
         
-        # Luego guardar los nuevos datos
         success, error = self.db.guardar_asistencia(self.current_curso, grupo_asistencia, fecha_str, asistencia_data)
         
         if success:
-            # Actualizar estadisticas finales del GRUPO
             stats = self.db.get_estadisticas_asistencia(self.current_curso, grupo_asistencia, fecha_str)
             presentes = stats.get('presente', 0)
             ausentes = stats.get('ausente', 0)
@@ -2753,31 +3027,25 @@ class GestorNotasApp(CTk):
         if not self.current_curso:
             return
         
-        # Recopilar datos
         asistencia_data = {}
         for est_id, datos in self.checkboxes_asistencia.items():
             estado = datos['estado']
-            if estado in ["presente", "ausente"]:  # Solo guardar si está marcado
+            if estado in ["presente", "ausente"]:
                 asistencia_data[est_id] = estado
         
         if not asistencia_data:
             return
         
-        # Obtener fecha y grupo
         fecha_str = self.cal_asistencia.get_date() if hasattr(self, 'cal_asistencia') else self.fecha_clase_var.get()
         try:
             grupo_asistencia = int(self.grupo_asistencia_var.get())
         except:
             grupo_asistencia = 1
         
-        # Guardar silenciosamente
         try:
-            # Primero eliminar registros existentes
             self.db.eliminar_asistencia_fecha(self.current_curso, grupo_asistencia, fecha_str)
-            # Luego guardar nuevos
             self.db.guardar_asistencia(self.current_curso, grupo_asistencia, fecha_str, asistencia_data)
             
-            # Actualizar estadísticas sin mostrar mensaje
             stats = self.db.get_estadisticas_asistencia(self.current_curso, grupo_asistencia, fecha_str)
             presentes = stats.get('presente', 0)
             ausentes = stats.get('ausente', 0)
@@ -2788,14 +3056,12 @@ class GestorNotasApp(CTk):
         except Exception as e:
             print(f"Error auto-guardando asistencia: {e}")
 
-   
     def exportar_clase_pdf(self):
         """Exporta la clase actual a PDF"""
         if not self.current_curso:
             messagebox.showwarning("Advertencia", "Selecciona un curso primero")
             return
         
-        # Verificar que los widgets existen
         if not hasattr(self, 'entry_encabezado_clase') or not self.entry_encabezado_clase.winfo_exists():
             messagebox.showerror("Error", "Error al acceder a los campos de la clase")
             return
@@ -2811,12 +3077,10 @@ class GestorNotasApp(CTk):
             messagebox.showerror("Error", "Necesitas instalar reportlab:\npip install reportlab")
             return
         
-        # Obtener valores de los campos de forma segura
         try:
             encabezado = self.entry_encabezado_clase.get().strip() if self.entry_encabezado_clase else ""
             topicos = self.entry_topicos.get().strip() if hasattr(self, 'entry_topicos') and self.entry_topicos.winfo_exists() else ""
             observaciones = self.entry_observaciones.get().strip() if hasattr(self, 'entry_observaciones') and self.entry_observaciones.winfo_exists() else ""
-            # Para tk.Text usar get con rangos, no get("1.0", "end")
             contenido = self.texto_clase.get("1.0", "end-1c").strip() if hasattr(self, 'texto_clase') else ""
         except Exception as e:
             messagebox.showerror("Error", f"Error al leer los campos: {str(e)}")
@@ -2825,7 +3089,6 @@ class GestorNotasApp(CTk):
         if not encabezado:
             encabezado = "Clase sin titulo"
         
-        # Pedir ubicación para guardar
         nombre_archivo = "".join(c for c in encabezado if c.isalnum() or c in (' ', '-', '_')).rstrip()
         nombre_archivo = nombre_archivo.replace(" ", "_")[:50] or "Clase"
         
@@ -2858,10 +3121,8 @@ class GestorNotasApp(CTk):
                                rightMargin=72, leftMargin=72,
                                topMargin=72, bottomMargin=18)
         
-        # Contenedor para elementos
         elementos = []
         
-        # Estilos
         estilos = getSampleStyleSheet()
         estilo_titulo = ParagraphStyle(
             'Titulo',
@@ -2869,7 +3130,7 @@ class GestorNotasApp(CTk):
             fontSize=18,
             textColor=colors.HexColor('#1f4788'),
             spaceAfter=30,
-            alignment=1  # Centro
+            alignment=1
         )
         estilo_subtitulo = ParagraphStyle(
             'Subtitulo',
@@ -2882,15 +3143,12 @@ class GestorNotasApp(CTk):
         estilo_normal.fontSize = 11
         estilo_normal.leading = 14
         
-        # TITULO
         elementos.append(Paragraph("REGISTRO DE CLASE", estilo_titulo))
         elementos.append(Spacer(1, 0.2*inch))
         
-        # ENCABEZADO
         elementos.append(Paragraph(f"<b>{encabezado}</b>", estilo_subtitulo))
         elementos.append(Spacer(1, 0.1*inch))
         
-        # CURSO
         curso_nombre = "Curso no seleccionado"
         if hasattr(self, 'cursos_data'):
             for nombre, cid in self.cursos_data.items():
@@ -2902,13 +3160,11 @@ class GestorNotasApp(CTk):
         elementos.append(Paragraph(f"<b>Fecha de exportacion:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", estilo_normal))
         elementos.append(Spacer(1, 0.2*inch))
         
-        # TOPICOS
         if topicos:
             elementos.append(Paragraph("<b>TOPICOS A TRATAR:</b>", estilo_subtitulo))
             elementos.append(Paragraph(topicos.replace('\n', '<br/>'), estilo_normal))
             elementos.append(Spacer(1, 0.2*inch))
         
-        # ENLACES
         links = []
         if hasattr(self, 'links_entries'):
             for nombre_entry, url_entry in self.links_entries:
@@ -2940,20 +3196,16 @@ class GestorNotasApp(CTk):
             elementos.append(tabla_links)
             elementos.append(Spacer(1, 0.2*inch))
         
-        # CONTENIDO DE LA CLASE
         if contenido:
             elementos.append(Paragraph("<b>DESARROLLO DE LA CLASE:</b>", estilo_subtitulo))
-            # Convertir saltos de linea a <br/>
             contenido_html = contenido.replace('\n', '<br/>')
             elementos.append(Paragraph(contenido_html, estilo_normal))
             elementos.append(Spacer(1, 0.2*inch))
         
-        # OBSERVACIONES
         if observaciones:
             elementos.append(Paragraph("<b>OBSERVACIONES:</b>", estilo_subtitulo))
             elementos.append(Paragraph(observaciones.replace('\n', '<br/>'), estilo_normal))
         
-        # Construir PDF
         doc.build(elementos)
 
     def exportar_todas_clases_pdf(self):
@@ -2972,14 +3224,12 @@ class GestorNotasApp(CTk):
             messagebox.showerror("Error", "Necesitas instalar reportlab:\npip install reportlab")
             return
         
-        # Obtener todas las clases de la base de datos
         clases_db = self.db.get_clases(self.current_curso)
         
         if not clases_db:
             messagebox.showwarning("Advertencia", "No hay clases guardadas para exportar")
             return
         
-        # Pedir ubicacion
         curso_nombre = "Curso"
         if hasattr(self, 'cursos_data'):
             for nombre, cid in self.cursos_data.items():
@@ -3003,7 +3253,6 @@ class GestorNotasApp(CTk):
             
             elementos = []
             
-            # Estilos
             estilos = getSampleStyleSheet()
             estilo_titulo = ParagraphStyle('Titulo', parent=estilos['Heading1'], fontSize=20, 
                                           textColor=colors.HexColor('#1f4788'), spaceAfter=30, alignment=1)
@@ -3012,7 +3261,6 @@ class GestorNotasApp(CTk):
             estilo_normal = estilos["BodyText"]
             estilo_normal.fontSize = 11
             
-            # Portada
             elementos.append(Spacer(1, 2*inch))
             elementos.append(Paragraph("REGISTRO DE CLASES", estilo_titulo))
             elementos.append(Spacer(1, 0.5*inch))
@@ -3021,40 +3269,33 @@ class GestorNotasApp(CTk):
             elementos.append(Paragraph(f"<b>Fecha de exportacion:</b> {datetime.now().strftime('%d/%m/%Y')}", estilo_normal))
             elementos.append(PageBreak())
             
-            # Cada clase
             for idx, clase_row in enumerate(clases_db, 1):
                 clase_id = clase_row[0]
                 
-                # Obtener datos completos de la clase
                 clase_data = self.db.get_clase_por_id(clase_id)
                 
                 if not clase_data:
                     continue
                 
-                # Numero de clase
                 elementos.append(Paragraph(f"CLASE {idx}", estilo_titulo))
                 elementos.append(Paragraph(f"<b>{clase_data.get('encabezado', 'Sin titulo')}</b>", estilo_subtitulo))
                 
-                # Topicos
                 topicos = clase_data.get('topicos', '')
                 if topicos:
                     elementos.append(Paragraph("<b>Topicos:</b> " + topicos, estilo_normal))
                 
-                # Enlaces
                 links = clase_data.get('links', [])
                 if links:
                     elementos.append(Paragraph("<b>Lecturas asignadas:</b>", estilo_normal))
                     for link in links:
                         elementos.append(Paragraph(f"• {link['nombre']}: {link['url']}", estilo_normal))
                 
-                # Contenido (resumido si es muy largo)
                 contenido = clase_data.get('contenido', '')
                 if contenido:
                     if len(contenido) > 1000:
                         contenido = contenido[:1000] + "..."
                     elementos.append(Paragraph("<b>Desarrollo:</b><br/>" + contenido.replace('\n', '<br/>'), estilo_normal))
                 
-                # Observaciones
                 obs = clase_data.get('observaciones', '')
                 if obs:
                     elementos.append(Paragraph("<b>Observaciones:</b> " + obs, estilo_normal))
@@ -3062,7 +3303,6 @@ class GestorNotasApp(CTk):
                 elementos.append(Spacer(1, 0.3*inch))
                 elementos.append(PageBreak())
             
-            # Eliminar el ultimo PageBreak
             if elementos and isinstance(elementos[-1], PageBreak):
                 elementos.pop()
             

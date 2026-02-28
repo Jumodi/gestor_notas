@@ -6,7 +6,7 @@ from datetime import datetime
 class DatabaseManager:
     def __init__(self, db_path=None):
         if db_path is None:
-         db_path = os.path.join("data", "notas.db")
+            db_path = os.path.join("data", "notas.db")
         self.db_path = db_path
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.init_database()
@@ -18,7 +18,6 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # ========== TABLA DE CURSOS ==========
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS cursos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,12 +27,11 @@ class DatabaseManager:
             )
         ''')
         
-        # Tabla de clases
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS clases (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 curso_id INTEGER NOT NULL,
-                grupo INTEGER DEFAULT 1,  -- NUEVO: grupo al que pertenece la clase
+                grupo INTEGER DEFAULT 1,
                 encabezado TEXT NOT NULL,
                 topicos TEXT,
                 contenido TEXT,
@@ -44,13 +42,11 @@ class DatabaseManager:
             )
         ''')
         
-        # Migración: agregar columna grupo si no existe
         try:
             cursor.execute("ALTER TABLE clases ADD COLUMN grupo INTEGER DEFAULT 1")
         except sqlite3.OperationalError:
             pass
         
-        # Tabla de evaluaciones
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS evaluaciones (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +60,6 @@ class DatabaseManager:
             )
         ''')
         
-        # Tabla de estudiantes
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS estudiantes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,9 +75,8 @@ class DatabaseManager:
         try:
             cursor.execute("ALTER TABLE estudiantes ADD COLUMN carne TEXT")
         except sqlite3.OperationalError:
-            pass  # Columna ya existe
+            pass
         
-        # Tabla de notas
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS notas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,7 +91,6 @@ class DatabaseManager:
             )
         ''')
         
-        # Tabla de configuración de sincronización
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sync_config (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -107,8 +100,6 @@ class DatabaseManager:
             )
         ''')
         
-       
-        # Tabla de enlaces de clases
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS clase_links (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -119,7 +110,6 @@ class DatabaseManager:
             )
         ''')
 
-        # Tabla de asistencia CON GRUPO
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS asistencia (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,16 +125,11 @@ class DatabaseManager:
             )
         ''')
         
-        # Migración: agregar columna grupo si no existe
         try:
             cursor.execute("ALTER TABLE asistencia ADD COLUMN grupo INTEGER DEFAULT 1")
         except sqlite3.OperationalError:
             pass
 
-        
-        # ========== TABLAS DE RÚBRICAS ==========
-
-        # Tabla de criterios de rúbrica para cada evaluación
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS rubrica_criterios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -157,7 +142,6 @@ class DatabaseManager:
             )
         ''')
 
-        # Tabla de calificaciones por criterio para cada estudiante
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS rubrica_calificaciones (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,8 +159,6 @@ class DatabaseManager:
         conn.commit()
         conn.close()
     
-    # ========== GESTIÓN DE RÚBRICAS ==========
-
     def agregar_criterio_rubrica(self, evaluacion_id, nombre_criterio, puntos_maximos, orden=0):
         """Agrega un criterio a la rúbrica de una evaluación"""
         conn = self.get_connection()
@@ -194,7 +176,7 @@ class DatabaseManager:
             return None, str(e)
         finally:
             conn.close()
-
+            
     def eliminar_criterio_rubrica(self, criterio_id):
         """Elimina un criterio de la rúbrica"""
         conn = self.get_connection()
@@ -203,6 +185,25 @@ class DatabaseManager:
             cursor.execute('DELETE FROM rubrica_criterios WHERE id = ?', (criterio_id,))
             conn.commit()
             return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def actualizar_criterio_rubrica(self, criterio_id, nombre_criterio, puntos_maximos, orden):
+        """Actualiza un criterio existente de la rúbrica"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE rubrica_criterios 
+                SET nombre_criterio = ?, puntos_maximos = ?, orden = ?
+                WHERE id = ?
+            ''', (nombre_criterio, puntos_maximos, orden, criterio_id))
+            conn.commit()
+            return True, None
+        except sqlite3.IntegrityError:
+            return False, "Ya existe un criterio con ese nombre en esta evaluación"
         except Exception as e:
             return False, str(e)
         finally:
@@ -288,8 +289,6 @@ class DatabaseManager:
         conn.close()
         return total
 
-    # ========== GESTIÓN DE CURSOS ==========
-    
     def crear_curso(self, nombre, descripcion=""):
         """Crea un nuevo curso"""
         conn = self.get_connection()
@@ -329,19 +328,15 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            # Eliminar notas relacionadas
             cursor.execute('''
                 DELETE FROM notas WHERE evaluacion_id IN 
                 (SELECT id FROM evaluaciones WHERE curso_id = ?)
             ''', (curso_id,))
             
-            # Eliminar evaluaciones
             cursor.execute('DELETE FROM evaluaciones WHERE curso_id = ?', (curso_id,))
             
-            # Eliminar estudiantes
             cursor.execute('DELETE FROM estudiantes WHERE curso_id = ?', (curso_id,))
             
-            # Eliminar curso
             cursor.execute('DELETE FROM cursos WHERE id = ?', (curso_id,))
             
             conn.commit()
@@ -368,14 +363,11 @@ class DatabaseManager:
         conn.close()
         return cursos
     
-    # ========== GESTIÓN DE EVALUACIONES ==========
-    
     def agregar_evaluacion(self, curso_id, nombre, porcentaje, orden=None):
         """Agrega una evaluación a un curso"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Si no se especifica orden, poner al final
         if orden is None:
             cursor.execute('''
                 SELECT COALESCE(MAX(orden), 0) + 1 FROM evaluaciones WHERE curso_id = ?
@@ -466,8 +458,6 @@ class DatabaseManager:
         conn.close()
         return total
     
-    # ========== GESTIÓN DE ESTUDIANTES ==========
-    
     def agregar_estudiante(self, curso_id, nombre, grupo=1, email=None, carne=None):
         """Agrega un estudiante a un curso"""
         conn = self.get_connection()
@@ -540,8 +530,6 @@ class DatabaseManager:
         conn.close()
         return ests
     
-    # ========== GESTIÓN DE NOTAS ==========
-    
     def get_nota(self, estudiante_id, evaluacion_id):
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -572,7 +560,6 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Obtener todas las evaluaciones del curso con sus puntos máximos
         cursor.execute('''
             SELECT id, porcentaje 
             FROM evaluaciones 
@@ -584,7 +571,6 @@ class DatabaseManager:
             conn.close()
             return 0.0, 0
         
-        # Obtener las notas del estudiante
         cursor.execute('''
             SELECT evaluacion_id, nota 
             FROM notas 
@@ -594,17 +580,14 @@ class DatabaseManager:
         
         conn.close()
         
-        # Sumar puntos obtenidos directamente
         puntos_obtenidos = 0
-        puntos_maximos_posibles = sum(evaluaciones.values())  # Debería ser 100
+        puntos_maximos_posibles = sum(evaluaciones.values())
         
         for eval_id, puntos_max in evaluaciones.items():
             if eval_id in notas_registradas:
                 puntos_obtenidos += notas_registradas[eval_id]
         
         return round(puntos_obtenidos, 2), int(puntos_maximos_posibles)
-    
-        # ========== GESTIÓN DE CLASES ==========
     
     def crear_clase(self, curso_id, encabezado, topicos="", contenido="", observaciones="", fecha_clase=None, grupo=1):
         """Crea una nueva clase en la base de datos"""
@@ -639,7 +622,6 @@ class DatabaseManager:
                 cursor.execute('UPDATE clases SET fecha_clase = ? WHERE id = ?', (fecha_clase, clase_id))
             if grupo is not None:
                 cursor.execute('UPDATE clases SET grupo = ? WHERE id = ?', (grupo, clase_id))
-            # Actualizar fecha de modificación
             cursor.execute('UPDATE clases SET fecha_modificacion = CURRENT_TIMESTAMP WHERE id = ?', (clase_id,))
             conn.commit()
             return True, None
@@ -653,7 +635,6 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            # Los enlaces se eliminan automáticamente por ON DELETE CASCADE
             cursor.execute('DELETE FROM clases WHERE id = ?', (clase_id,))
             conn.commit()
             return True, None
@@ -689,7 +670,6 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Obtener datos de la clase
         cursor.execute('''
             SELECT id, curso_id, grupo, encabezado, topicos, contenido, observaciones, fecha_clase, fecha_modificacion
             FROM clases WHERE id = ?
@@ -700,7 +680,6 @@ class DatabaseManager:
             conn.close()
             return None
         
-        # Obtener enlaces
         cursor.execute('SELECT nombre, url FROM clase_links WHERE clase_id = ?', (clase_id,))
         links = [{"nombre": row[0], "url": row[1]} for row in cursor.fetchall()]
         
@@ -748,25 +727,20 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    # ========== GESTIÓN DE ASISTENCIA ==========
-
     def guardar_asistencia(self, curso_id, grupo, fecha, asistencia_dict):
         """Guarda el registro de asistencia para una fecha"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             for estudiante_id, estado in asistencia_dict.items():
-                # Convertir estudiante_id a int para consistencia
                 estudiante_id = int(estudiante_id)
                 
-                # PRIMERO: intentar actualizar si existe
                 cursor.execute('''
                     UPDATE asistencia 
                     SET estado = ?, fecha_registro = CURRENT_TIMESTAMP
                     WHERE curso_id = ? AND grupo = ? AND estudiante_id = ? AND fecha = ?
                 ''', (estado, curso_id, grupo, estudiante_id, fecha))
                 
-                # Si no se actualizó ninguna fila, hacer insert
                 if cursor.rowcount == 0:
                     cursor.execute('''
                         INSERT INTO asistencia (curso_id, grupo, estudiante_id, fecha, estado)
@@ -791,7 +765,6 @@ class DatabaseManager:
             WHERE curso_id = ? AND grupo = ? AND fecha = ?
         ''', (curso_id, grupo, fecha))
         
-        # Convertir estudiante_id a string para consistencia con el diccionario
         resultados = {str(row[0]): row[1] for row in cursor.fetchall()}
         conn.close()
         return resultados
@@ -849,8 +822,6 @@ class DatabaseManager:
         finally:
             conn.close()
     
-    # ========== EXPORTACIÓN ==========
-    
     def exportar_a_excel(self, curso_id, filepath):
         """Exporta todas las notas del curso a Excel usando openpyxl"""
         from openpyxl import Workbook
@@ -868,16 +839,13 @@ class DatabaseManager:
         
         ests = self.get_estudiantes(curso_id)
         
-        # Crear libro de Excel
         wb = Workbook()
         ws = wb.active
         ws.title = 'Notas'
         
-        # Encabezados
         headers = ['ID', 'Nombre', 'Grupo', 'Email'] + eval_nombres + ['PROMEDIO']
         ws.append(headers)
         
-        # Formato encabezados (negrita, fondo gris)
         header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
         header_font = Font(bold=True, color='FFFFFF')
         header_align = Alignment(horizontal='center', vertical='center')
@@ -887,7 +855,6 @@ class DatabaseManager:
             cell.fill = header_fill
             cell.alignment = header_align
         
-        # Datos de estudiantes
         for est in ests:
             est_id, nombre, grupo, email, carne = est
             row = [est_id, nombre, grupo, email or '']
@@ -901,9 +868,6 @@ class DatabaseManager:
             
             ws.append(row)
         
-        #Prueba de código
-
-        # Ajustar anchos de columna
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -919,144 +883,8 @@ class DatabaseManager:
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
         
-        # Congelar primera fila
         ws.freeze_panes = 'A2'
         
-        # Guardar archivo
         wb.save(filepath)
         conn.close()
         return filepath
-    
-        # ========== GESTION DE RUBRICAS ==========
-
-    def agregar_criterio_rubrica(self, evaluacion_id, nombre_criterio, puntos_maximos, orden=0):
-        """Agrega un criterio a la rubrica de una evaluacion"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute('''
-                INSERT INTO rubrica_criterios (evaluacion_id, nombre_criterio, puntos_maximos, orden)
-                VALUES (?, ?, ?, ?)
-            ''', (evaluacion_id, nombre_criterio, puntos_maximos, orden))
-            conn.commit()
-            return cursor.lastrowid, None
-        except sqlite3.IntegrityError:
-            return None, "Ya existe un criterio con ese nombre en esta evaluacion"
-        except Exception as e:
-            return None, str(e)
-        finally:
-            conn.close()
-
-    def actualizar_criterio_rubrica(self, criterio_id, nombre_criterio=None, puntos_maximos=None, orden=None):
-        """Actualiza un criterio existente"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            if nombre_criterio is not None:
-                cursor.execute('UPDATE rubrica_criterios SET nombre_criterio = ? WHERE id = ?', 
-                              (nombre_criterio, criterio_id))
-            if puntos_maximos is not None:
-                cursor.execute('UPDATE rubrica_criterios SET puntos_maximos = ? WHERE id = ?', 
-                              (puntos_maximos, criterio_id))
-            if orden is not None:
-                cursor.execute('UPDATE rubrica_criterios SET orden = ? WHERE id = ?', 
-                              (orden, criterio_id))
-            conn.commit()
-            return True, None
-        except Exception as e:
-            return False, str(e)
-        finally:
-            conn.close()
-
-    def eliminar_criterio_rubrica(self, criterio_id):
-        """Elimina un criterio de la rubrica"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute('DELETE FROM rubrica_criterios WHERE id = ?', (criterio_id,))
-            conn.commit()
-            return True, None
-        except Exception as e:
-            return False, str(e)
-        finally:
-            conn.close()
-
-    def get_criterios_rubrica(self, evaluacion_id):
-        """Obtiene todos los criterios de una rubrica"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT id, nombre_criterio, puntos_maximos, orden
-            FROM rubrica_criterios
-            WHERE evaluacion_id = ?
-            ORDER BY orden, id
-        ''', (evaluacion_id,))
-        criterios = cursor.fetchall()
-        conn.close()
-        return criterios
-
-    def get_total_puntos_rubrica(self, evaluacion_id):
-        """Obtiene la suma total de puntos de la rubrica"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT COALESCE(SUM(puntos_maximos), 0)
-            FROM rubrica_criterios
-            WHERE evaluacion_id = ?
-        ''', (evaluacion_id,))
-        total = cursor.fetchone()[0]
-        conn.close()
-        return total
-
-    def guardar_calificacion_rubrica(self, estudiante_id, criterio_id, puntos_obtenidos, observaciones=""):
-        """Guarda la calificacion de un estudiante en un criterio especifico"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute('''
-                INSERT INTO rubrica_calificaciones (estudiante_id, criterio_id, puntos_obtenidos, observaciones)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(estudiante_id, criterio_id)
-                DO UPDATE SET puntos_obtenidos=excluded.puntos_obtenidos, 
-                             observaciones=excluded.observaciones,
-                             fecha_registro=CURRENT_TIMESTAMP
-            ''', (estudiante_id, criterio_id, puntos_obtenidos, observaciones))
-            conn.commit()
-            return True, None
-        except Exception as e:
-            return False, str(e)
-        finally:
-            conn.close()
-
-    def get_calificaciones_rubrica_estudiante(self, estudiante_id, evaluacion_id):
-        """Obtiene todas las calificaciones de rubrica de un estudiante para una evaluacion"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT rc.id, rc.nombre_criterio, rc.puntos_maximos, 
-                   COALESCE(rcl.puntos_obtenidos, 0) as puntos_obtenidos,
-                   rcl.observaciones
-            FROM rubrica_criterios rc
-            LEFT JOIN rubrica_calificaciones rcl ON rc.id = rcl.criterio_id 
-                                                  AND rcl.estudiante_id = ?
-            WHERE rc.evaluacion_id = ?
-            ORDER BY rc.orden, rc.id
-        ''', (estudiante_id, evaluacion_id))
-        calificaciones = cursor.fetchall()
-        conn.close()
-        return calificaciones
-
-    def calcular_nota_total_rubrica(self, estudiante_id, evaluacion_id):
-        """Calcula la nota total sumando los puntos de la rubrica"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT COALESCE(SUM(rcl.puntos_obtenidos), 0)
-            FROM rubrica_criterios rc
-            LEFT JOIN rubrica_calificaciones rcl ON rc.id = rcl.criterio_id 
-                                                  AND rcl.estudiante_id = ?
-            WHERE rc.evaluacion_id = ?
-        ''', (estudiante_id, evaluacion_id))
-        total = cursor.fetchone()[0]
-        conn.close()
-        return total

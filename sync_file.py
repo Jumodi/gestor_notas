@@ -20,13 +20,10 @@ class FileSyncManager:
         self.db_path = db_path
         self.system = platform.system()
         
-        # Archivo de configuracion
         self.config_file = os.path.join(os.path.dirname(db_path), "sync_config.json")
         
-        # Cargar o crear configuracion
         self.config = self._load_config()
         
-        # Establecer carpeta de sincronizacion
         if sync_folder:
             self.sync_folder = sync_folder
             self.config["sync_folder"] = sync_folder
@@ -34,14 +31,11 @@ class FileSyncManager:
         else:
             self.sync_folder = self.config.get("sync_folder")
         
-        # Contrasena para encriptacion
         self.password = password or self.config.get("password", "default_password_change_me")
         
-        # Archivo de sincronizacion
         self.sync_file = os.path.join(self.sync_folder, "notas_sync.enc") if self.sync_folder else None
         self.meta_file = os.path.join(self.sync_folder, "notas_sync.meta") if self.sync_folder else None
         
-        # Cache de hash
         self.last_hash = None
         
     def _load_config(self):
@@ -106,7 +100,6 @@ class FileSyncManager:
             except Exception as e:
                 return False, f"No se pudo crear la carpeta: {str(e)}"
         
-        # Verificar que sea escribible
         test_file = os.path.join(folder_path, ".write_test")
         try:
             with open(test_file, 'w') as f:
@@ -122,7 +115,6 @@ class FileSyncManager:
         self.config["sync_folder"] = folder_path
         self._save_config()
         
-        # Detectar tipo de servicio
         servicio = self._detectar_servicio(folder_path)
         
         return True, f"Carpeta configurada: {folder_path}\nServicio detectado: {servicio}"
@@ -159,23 +151,18 @@ class FileSyncManager:
             return False, "No se encontro la base de datos local"
         
         try:
-            # Leer base de datos
             with open(self.db_path, 'rb') as f:
                 db_data = f.read()
             
-            # Generar salt y clave
             salt = os.urandom(16)
             key, _ = self._derive_key(self.password, salt)
             fernet = Fernet(key)
             
-            # Encriptar datos
             encrypted_data = fernet.encrypt(db_data)
             
-            # Guardar archivo encriptado (salt + datos)
             with open(self.sync_file, 'wb') as f:
                 f.write(salt + encrypted_data)
             
-            # Crear metadata
             metadata = {
                 "timestamp": datetime.now().isoformat(),
                 "hash_local": self._calculate_hash(self.db_path),
@@ -208,31 +195,24 @@ class FileSyncManager:
             return False, "No hay archivo de sincronizacion en la carpeta", None
         
         try:
-            # Leer metadata si existe
             metadata = {}
             if os.path.exists(self.meta_file):
                 with open(self.meta_file, 'r') as f:
                     metadata = json.load(f)
             
-            # Calcular hash actual de la base de datos local
             hash_local_actual = self._calculate_hash(self.db_path)
             
-            # Verificar si hay cambios en el archivo de sync
             hash_sync = metadata.get("hash_local", "desconocido")
             
-            # Si los hashes son iguales y no se fuerza, no hay cambios
             if hash_local_actual == hash_sync and not forzar and os.path.exists(self.db_path):
                 return True, "Los archivos estan sincronizados (mismo hash)", "sincronizado"
             
-            # Leer archivo encriptado
             with open(self.sync_file, 'rb') as f:
                 data = f.read()
             
-            # Extraer salt (primeros 16 bytes)
             salt = data[:16]
             encrypted_data = data[16:]
             
-            # Derivar clave y desencriptar
             key, _ = self._derive_key(self.password, salt)
             fernet = Fernet(key)
             
@@ -241,16 +221,13 @@ class FileSyncManager:
             except Exception:
                 return False, "Error de desencriptacion. Verifica la contrasena.", None
             
-            # Guardar backup de la base de datos actual si existe
             if os.path.exists(self.db_path):
                 backup_path = self.db_path + ".backup_" + datetime.now().strftime("%Y%m%d_%H%M%S")
                 shutil.copy2(self.db_path, backup_path)
             
-            # Guardar nueva base de datos
             with open(self.db_path, 'wb') as f:
                 f.write(db_data)
             
-            # Actualizar hash
             self.last_hash = self._calculate_hash(self.db_path)
             
             info_import = {
@@ -276,7 +253,6 @@ class FileSyncManager:
         if not os.path.exists(self.sync_file):
             return "no_sync_file", "No hay archivo de sincronizacion", None
         
-        # Leer metadata
         metadata = {}
         if os.path.exists(self.meta_file):
             try:
@@ -289,7 +265,6 @@ class FileSyncManager:
         hash_sync = metadata.get("hash_local", None)
         timestamp_sync = metadata.get("timestamp", "desconocido")
         
-        # Verificar timestamps para detectar conflicto
         tiempo_local = self._get_file_timestamp(self.db_path) if os.path.exists(self.db_path) else 0
         tiempo_sync_file = self._get_file_timestamp(self.sync_file)
         
@@ -303,14 +278,12 @@ class FileSyncManager:
             "comentario": metadata.get("comentario", "")
         }
         
-        # Estados posibles
         if not hash_sync:
             return "sin_metadata", "Archivo de sync sin metadata", info
         
         if hash_local == hash_sync:
             return "sincronizado", "Sincronizado correctamente", info
         
-        # Detectar conflicto: ambos archivos modificados despues del ultimo sync
         if tiempo_local > tiempo_sync_file and hash_local != hash_sync:
             return "conflicto", "Conflicto: ambas versiones tienen cambios", info
         
@@ -338,25 +311,18 @@ class FileSyncManager:
         home = os.path.expanduser("~")
         
         if self.system == "Windows":
-            # Dropbox
             paths.append(("Dropbox", os.path.join(home, "Dropbox")))
-            # OneDrive
             paths.append(("OneDrive", os.path.join(home, "OneDrive")))
-            # iCloud (raro en Windows pero posible)
             paths.append(("iCloud", os.path.join(home, "iCloudDrive")))
             
-        elif self.system == "Darwin":  # macOS
-            # Dropbox
+        elif self.system == "Darwin":
             paths.append(("Dropbox", os.path.join(home, "Dropbox")))
-            # iCloud Drive
             paths.append(("iCloud Drive", os.path.join(home, "Library", "Mobile Documents", "com~apple~CloudDocs")))
-            # OneDrive
             paths.append(("OneDrive", os.path.join(home, "OneDrive")))
             
-        else:  # Linux
+        else:
             paths.append(("Dropbox", os.path.join(home, "Dropbox")))
         
-        # Filtrar solo las que existen
         return [(nombre, ruta) for nombre, ruta in paths if os.path.exists(ruta)]
     
     def verify_password(self, password_test):
@@ -364,7 +330,7 @@ class FileSyncManager:
         Verifica si una contrasena puede desencriptar el archivo de sync.
         """
         if not os.path.exists(self.sync_file):
-            return True  # No hay archivo, cualquier contrasena sirve para crear nuevo
+            return True
         
         try:
             with open(self.sync_file, 'rb') as f:
