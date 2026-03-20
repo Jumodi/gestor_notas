@@ -99,68 +99,58 @@ class GestorNotasApp(CTk):
         self.load_cursos()
         self.after(1000, self.verificar_sincronizacion_inicio)
 
-    def ajustar_ventana(self, dialog, contenido_frame, min_ancho=600, min_alto=400, 
-                    max_ancho_pantalla=0.9, max_alto_pantalla=0.85):
+    def ajustar_dialogo_responsivo(self, dialog, contenido_frame, min_ancho=500, min_alto=400):
         """
-        Ajusta la ventana al tamaño óptimo del contenido, respetando límites de pantalla.
+        Ajusta el dialogo al tamaño optimo del contenido respetando limites de pantalla.
+        Si el contenido excede el 85% de la pantalla, limita el tamano y activa scroll interno.
         """
-        # Actualizar geometría para calcular tamaño real del contenido
         dialog.update_idletasks()
         contenido_frame.update_idletasks()
         
-        # Obtener tamaño requerido por el contenido
-        req_ancho = contenido_frame.winfo_reqwidth() + 40  # + padding
-        req_alto = contenido_frame.winfo_reqheight() + 80  # + padding + título/botones
+        req_ancho = contenido_frame.winfo_reqwidth() + 60
+        req_alto = contenido_frame.winfo_reqheight() + 80
         
-        # Obtener tamaño de la pantalla
         screen_ancho = dialog.winfo_screenwidth()
         screen_alto = dialog.winfo_screenheight()
         
-        # Calcular límites máximos
-        max_ancho = int(screen_ancho * max_ancho_pantalla)
-        max_alto = int(screen_alto * max_alto_pantalla)
+        max_ancho = int(screen_ancho * 0.9)
+        max_alto = int(screen_alto * 0.85)
         
-        # Aplicar límites
         ancho_final = max(min_ancho, min(req_ancho, max_ancho))
         alto_final = max(min_alto, min(req_alto, max_alto))
         
-        # Centrar en pantalla (CORREGIDO: usar screen_alto para y)
         x = (screen_ancho - ancho_final) // 2
         y = (screen_alto - alto_final) // 2
         
-        # Aplicar geometría
         dialog.geometry(f"{ancho_final}x{alto_final}+{x}+{y}")
         dialog.minsize(min_ancho, min_alto)
-        
-        # Retornar si necesita scroll
-        return req_alto > max_alto or req_ancho > max_ancho
 
     def sincronizar_manual(self):
         """Abre dialogo de sincronizacion por archivo compartido"""
         dialog = ctk.CTkToplevel(self)
         dialog.title("Sincronizacion por Archivo Compartido")
-        dialog.geometry("500x600")
         dialog.transient(self)
         dialog.grab_set()
         
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (500 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (600 // 2)
-        dialog.geometry(f"500x600+{x}+{y}")
+        # Contenedor con scroll
+        main_frame = CTkScrollableFrame(dialog, fg_color=COLORES["fondo"],
+                                    corner_radius=0,
+                                    scrollbar_button_color=COLORES["secundario"])
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        CTkLabel(dialog, text="Sincronizacion de Datos", 
+        CTkLabel(main_frame, text="Sincronizacion de Datos", 
                 font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 10))
         
         estado, mensaje, info = self.file_sync.check_sync_status()
         
-        frame_estado = CTkFrame(dialog)
+        frame_estado = CTkFrame(main_frame)
         frame_estado.pack(fill="x", padx=20, pady=10)
         
         CTkLabel(frame_estado, text="Estado:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(10, 0))
         
         color_estado = "green" if estado == "sincronizado" else "orange" if estado == "necesita_importar" else "red"
         lbl_estado = CTkLabel(frame_estado, text=mensaje, text_color=color_estado,
-                             font=ctk.CTkFont(weight="bold"))
+                            font=ctk.CTkFont(weight="bold"))
         lbl_estado.pack(anchor="w", padx=10, pady=5)
         
         if info:
@@ -169,14 +159,14 @@ class GestorNotasApp(CTk):
             CTkLabel(frame_estado, text=info_text, font=ctk.CTkFont(size=11), 
                     text_color="gray").pack(anchor="w", padx=10, pady=(0, 10))
         
-        CTkLabel(dialog, text="Carpeta de sincronizacion:", 
+        CTkLabel(main_frame, text="Carpeta de sincronizacion:", 
                 font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=20, pady=(20, 5))
         
         folder_text = self.file_sync.sync_folder or "No configurada"
-        lbl_folder = CTkLabel(dialog, text=folder_text, font=ctk.CTkFont(size=11))
+        lbl_folder = CTkLabel(main_frame, text=folder_text, font=ctk.CTkFont(size=11))
         lbl_folder.pack(anchor="w", padx=20)
         
-        btn_frame = CTkFrame(dialog, fg_color="transparent")
+        btn_frame = CTkFrame(main_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=20)
         
         def exportar():
@@ -199,23 +189,23 @@ class GestorNotasApp(CTk):
                 messagebox.showerror("Error", msg)
         
         CTkButton(btn_frame, text="Exportar a carpeta (Subir)", 
-                 command=exportar, fg_color="blue", height=40).pack(fill="x", pady=5)
+                command=exportar, fg_color="blue", height=40).pack(fill="x", pady=5)
         CTkButton(btn_frame, text="Importar de carpeta (Descargar)", 
-                 command=importar, fg_color="green", height=40).pack(fill="x", pady=5)
+                command=importar, fg_color="green", height=40).pack(fill="x", pady=5)
         
-        CTkFrame(dialog, height=2, fg_color="gray").pack(fill="x", padx=20, pady=20)
+        CTkFrame(main_frame, height=2, fg_color="gray").pack(fill="x", padx=20, pady=20)
         
-        CTkLabel(dialog, text="Configuracion", 
+        CTkLabel(main_frame, text="Configuracion", 
                 font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=20)
         
         carpetas_default = self.file_sync.get_default_sync_paths()
         
         if carpetas_default:
-            CTkLabel(dialog, text="Servicios detectados:", 
+            CTkLabel(main_frame, text="Servicios detectados:", 
                     font=ctk.CTkFont(size=12)).pack(anchor="w", padx=20, pady=(10, 5))
             
             for nombre, ruta in carpetas_default:
-                frame_servicio = CTkFrame(dialog)
+                frame_servicio = CTkFrame(main_frame)
                 frame_servicio.pack(fill="x", padx=20, pady=2)
                 
                 CTkLabel(frame_servicio, text=nombre, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10)
@@ -230,7 +220,7 @@ class GestorNotasApp(CTk):
                         messagebox.showerror("Error", msg)
                 
                 CTkButton(frame_servicio, text="Usar", width=60, 
-                         command=usar_ruta).pack(side="right", padx=5)
+                        command=usar_ruta).pack(side="right", padx=5)
         
         def seleccionar_carpeta():
             folder = filedialog.askdirectory(title="Seleccionar carpeta de sincronizacion")
@@ -242,19 +232,19 @@ class GestorNotasApp(CTk):
                 else:
                     messagebox.showerror("Error", msg)
         
-        CTkButton(dialog, text="Seleccionar carpeta manualmente...", 
-                 command=seleccionar_carpeta).pack(fill="x", padx=20, pady=10)
+        CTkButton(main_frame, text="Seleccionar carpeta manualmente...", 
+                command=seleccionar_carpeta).pack(fill="x", padx=20, pady=10)
         
         if estado == "conflicto":
-            CTkFrame(dialog, height=2, fg_color="red").pack(fill="x", padx=20, pady=20)
+            CTkFrame(main_frame, height=2, fg_color="red").pack(fill="x", padx=20, pady=20)
             
-            CTkLabel(dialog, text="Conflicto detectado", 
+            CTkLabel(main_frame, text="Conflicto detectado", 
                     font=ctk.CTkFont(size=14, weight="bold"), text_color="red").pack(anchor="w", padx=20)
             
-            CTkLabel(dialog, text="Ambas versiones tienen cambios. Elige cual conservar:", 
+            CTkLabel(main_frame, text="Ambas versiones tienen cambios. Elige cual conservar:", 
                     font=ctk.CTkFont(size=12)).pack(anchor="w", padx=20, pady=5)
             
-            conflict_frame = CTkFrame(dialog)
+            conflict_frame = CTkFrame(main_frame)
             conflict_frame.pack(fill="x", padx=20, pady=10)
             
             def resolver_usar_local():
@@ -273,14 +263,14 @@ class GestorNotasApp(CTk):
                         lbl_estado.configure(text="Sincronizado", text_color="green")
             
             CTkButton(conflict_frame, text="Usar version LOCAL (subir)", 
-                     command=resolver_usar_local, fg_color="orange", height=35).pack(fill="x", pady=5)
+                    command=resolver_usar_local, fg_color="orange", height=35).pack(fill="x", pady=5)
             CTkButton(conflict_frame, text="Usar version de CARPETA (descargar)", 
-                     command=resolver_usar_nube, fg_color="orange", height=35).pack(fill="x", pady=5)
+                    command=resolver_usar_nube, fg_color="orange", height=35).pack(fill="x", pady=5)
         
-        CTkButton(dialog, text="Cerrar", command=dialog.destroy, 
-                 fg_color="gray").pack(pady=20)
+        CTkButton(main_frame, text="Cerrar", command=dialog.destroy, 
+                fg_color="gray").pack(pady=20)
         
-        self.ajustar_ventana(dialog, main_frame, min_ancho=550, min_alto=500)
+        self.ajustar_dialogo_responsivo(dialog, main_frame, 550, 500)
 
     def verificar_sincronizacion_inicio(self):
         """Verifica el estado de sincronizacion al iniciar la aplicacion"""
@@ -574,7 +564,7 @@ class GestorNotasApp(CTk):
 
     def editar_rubrica(self):
         if not self.current_evaluacion:
-            messagebox.showwarning("Advertencia", "Seleccione una evaluación primero")
+            messagebox.showwarning("Advertencia", "Seleccione una evaluacion primero")
             return
         
         evals = self.db.get_evaluaciones(self.current_curso)
@@ -586,47 +576,47 @@ class GestorNotasApp(CTk):
         puntos_max_eval = eval_info[2]
         
         dialog = ctk.CTkToplevel(self)
-        dialog.title(f"Editar Rúbrica - {eval_nombre}")
-        dialog.geometry("700x600")
+        dialog.title(f"Editar Rubrica - {eval_nombre}")
         dialog.transient(self)
         dialog.grab_set()
         
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (700 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (600 // 2)
-        dialog.geometry(f"700x600+{x}+{y}")
+        # Contenedor principal con scroll
+        main_scroll = CTkScrollableFrame(dialog, fg_color=COLORES["fondo"],
+                                        corner_radius=0,
+                                        scrollbar_button_color=COLORES["secundario"])
+        main_scroll.pack(fill="both", expand=True, padx=10, pady=10)
         
-        CTkLabel(dialog,
-                text=f"RÚBRICA: {eval_nombre}",
+        CTkLabel(main_scroll,
+                text=f"RUBRICA: {eval_nombre}",
                 font=self.FUENTES["titulo"],
                 text_color=COLORES["texto"]).pack(pady=(20, 5))
         
-        CTkLabel(dialog,
-                text=f"Puntos máximos de la evaluación: {puntos_max_eval}",
+        CTkLabel(main_scroll,
+                text=f"Puntos maximos de la evaluacion: {puntos_max_eval}",
                 font=self.FUENTES["normal"],
                 text_color=COLORES["texto_secundario"]).pack()
         
-        frame_total = CTkFrame(dialog,
-                              fg_color=COLORES["fondo"],
-                              corner_radius=8)
+        frame_total = CTkFrame(main_scroll,
+                            fg_color=COLORES["fondo"],
+                            corner_radius=8)
         frame_total.pack(fill="x", padx=20, pady=10)
         
         self.lbl_total_rubrica = CTkLabel(frame_total,
-                                         text="Total asignado en rúbrica: 0",
-                                         font=self.FUENTES["subtitulo"],
-                                         text_color=COLORES["texto"])
+                                        text="Total asignado en rubrica: 0",
+                                        font=self.FUENTES["subtitulo"],
+                                        text_color=COLORES["texto"])
         self.lbl_total_rubrica.pack(side="left", padx=15, pady=10)
         
         self.lbl_diferencia = CTkLabel(frame_total,
-                                      text="(Faltan: 20)",
-                                      font=self.FUENTES["normal"],
-                                      text_color=COLORES["alerta"])
+                                    text="(Faltan: 20)",
+                                    font=self.FUENTES["normal"],
+                                    text_color=COLORES["alerta"])
         self.lbl_diferencia.pack(side="left", padx=10)
         
-        scroll_criterios = CTkScrollableFrame(dialog,
-                                             fg_color=COLORES["tarjeta"],
-                                             height=350,
-                                             corner_radius=8)
+        scroll_criterios = CTkScrollableFrame(main_scroll,
+                                            fg_color=COLORES["tarjeta"],
+                                            height=350,
+                                            corner_radius=8)
         scroll_criterios.pack(fill="both", expand=True, padx=20, pady=10)
         
         self.frame_criterios_list = scroll_criterios
@@ -663,23 +653,23 @@ class GestorNotasApp(CTk):
             frame.pack(fill="x", pady=3, padx=2)
             
             entry_nombre = CTkEntry(frame,
-                                   placeholder_text="Nombre del criterio",
-                                   width=350,
-                                   font=self.FUENTES["normal"],
-                                   fg_color=COLORES["tarjeta"],
-                                   text_color=COLORES["texto"],
-                                   border_color=COLORES["borde"])
+                                placeholder_text="Nombre del criterio",
+                                width=350,
+                                font=self.FUENTES["normal"],
+                                fg_color=COLORES["tarjeta"],
+                                text_color=COLORES["texto"],
+                                border_color=COLORES["borde"])
             entry_nombre.pack(side="left", padx=5, pady=5, fill="x", expand=True)
             if nombre:
                 entry_nombre.insert(0, nombre)
             
             entry_puntos = CTkEntry(frame,
-                                   placeholder_text="Pts",
-                                   width=80,
-                                   font=self.FUENTES["normal"],
-                                   fg_color=COLORES["tarjeta"],
-                                   text_color=COLORES["texto"],
-                                   border_color=COLORES["borde"])
+                                placeholder_text="Pts",
+                                width=80,
+                                font=self.FUENTES["normal"],
+                                fg_color=COLORES["tarjeta"],
+                                text_color=COLORES["texto"],
+                                border_color=COLORES["borde"])
             entry_puntos.pack(side="left", padx=5, pady=5)
             if puntos:
                 entry_puntos.insert(0, str(puntos))
@@ -702,13 +692,13 @@ class GestorNotasApp(CTk):
                     criterio_info['eliminar'] = True
             
             CTkButton(frame,
-                     text="X",
-                     width=30,
-                     command=eliminar_fila,
-                     fg_color=COLORES["peligro"],
-                     hover_color="#A93226",
-                     font=self.FUENTES["boton"],
-                     height=28).pack(side="left", padx=5, pady=5)
+                    text="X",
+                    width=30,
+                    command=eliminar_fila,
+                    fg_color=COLORES["peligro"],
+                    hover_color="#A93226",
+                    font=self.FUENTES["boton"],
+                    height=28).pack(side="left", padx=5, pady=5)
         
         criterios_existentes = self.db.get_criterios_rubrica(self.current_evaluacion)
         if criterios_existentes:
@@ -721,15 +711,15 @@ class GestorNotasApp(CTk):
         
         actualizar_total()
         
-        CTkButton(dialog,
-                 text="+ Agregar Criterio",
-                 command=lambda: agregar_fila_criterio(),
-                 fg_color=COLORES["secundario"],
-                 hover_color=COLORES["primario"],
-                 font=self.FUENTES["boton"],
-                 height=32).pack(pady=5)
+        CTkButton(main_scroll,
+                text="+ Agregar Criterio",
+                command=lambda: agregar_fila_criterio(),
+                fg_color=COLORES["secundario"],
+                hover_color=COLORES["primario"],
+                font=self.FUENTES["boton"],
+                height=32).pack(pady=5)
         
-        btn_frame = CTkFrame(dialog, fg_color="transparent")
+        btn_frame = CTkFrame(main_scroll, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=15)
         
         def guardar_rubrica():
@@ -754,7 +744,7 @@ class GestorNotasApp(CTk):
             
             if total != puntos_max_eval:
                 messagebox.showerror("Error",
-                    f"Los puntos de la rúbrica deben sumar exactamente {puntos_max_eval}.\n"
+                    f"Los puntos de la rubrica deben sumar exactamente {puntos_max_eval}.\n"
                     f"Actualmente suman: {total}")
                 return
             
@@ -775,27 +765,29 @@ class GestorNotasApp(CTk):
                                 idx
                             )
                 
-                messagebox.showinfo("Éxito", "Rúbrica guardada correctamente")
+                messagebox.showinfo("Exito", "Rubrica guardada correctamente")
                 dialog.destroy()
                 
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo guardar: {str(e)}")
         
         CTkButton(btn_frame,
-                 text="Guardar Rúbrica",
-                 command=guardar_rubrica,
-                 fg_color=COLORES["exito"],
-                 hover_color="#219A52",
-                 height=40,
-                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
+                text="Guardar Rubrica",
+                command=guardar_rubrica,
+                fg_color=COLORES["exito"],
+                hover_color="#219A52",
+                height=40,
+                font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
         
         CTkButton(btn_frame,
-                 text="Cancelar",
-                 command=dialog.destroy,
-                 fg_color=COLORES["secundario"],
-                 hover_color=COLORES["primario"],
-                 height=40,
-                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
+                text="Cancelar",
+                command=dialog.destroy,
+                fg_color=COLORES["secundario"],
+                hover_color=COLORES["primario"],
+                height=40,
+                font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
+        
+        self.ajustar_dialogo_responsivo(dialog, main_scroll, 700, 600)
 
     def agregar_estudiante(self):
         if not self.current_curso:
@@ -804,26 +796,23 @@ class GestorNotasApp(CTk):
         
         dialog = ctk.CTkToplevel(self)
         dialog.title("Nuevo Estudiante")
-        dialog.geometry("450x450")
         dialog.transient(self)
         dialog.grab_set()
         
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (450 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (450 // 2)
-        dialog.geometry(f"450x450+{x}+{y}")
+        # Contenedor con scroll para pantallas pequenas
+        scroll_frame = CTkScrollableFrame(dialog, fg_color=COLORES["fondo"], 
+                                        corner_radius=0,
+                                        scrollbar_button_color=COLORES["secundario"])
+        scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        frame = CTkFrame(dialog, fg_color=COLORES["fondo"])
-        frame.pack(fill="both", expand=True, padx=15, pady=15)
-        
-        CTkLabel(frame,
+        CTkLabel(scroll_frame,
                 text="NUEVO ESTUDIANTE",
                 font=self.FUENTES["subtitulo"],
                 text_color=COLORES["texto"]).pack(pady=(15, 20))
         
-        campos_frame = CTkFrame(frame,
-                               fg_color=COLORES["tarjeta"],
-                               corner_radius=8)
+        campos_frame = CTkFrame(scroll_frame,
+                            fg_color=COLORES["tarjeta"],
+                            corner_radius=8)
         campos_frame.pack(fill="x", padx=10, pady=5)
         
         CTkLabel(campos_frame,
@@ -831,25 +820,25 @@ class GestorNotasApp(CTk):
                 font=self.FUENTES["boton"],
                 text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=(15, 5))
         entry_nombre = CTkEntry(campos_frame,
-                               width=380,
-                               placeholder_text="Ej: Juan Pérez García",
-                               font=self.FUENTES["normal"],
-                               fg_color=COLORES["tarjeta"],
-                               text_color=COLORES["texto"],
-                               border_color=COLORES["borde"])
+                            width=380,
+                            placeholder_text="Ej: Juan Perez Garcia",
+                            font=self.FUENTES["normal"],
+                            fg_color=COLORES["tarjeta"],
+                            text_color=COLORES["texto"],
+                            border_color=COLORES["borde"])
         entry_nombre.pack(fill="x", padx=15, pady=5)
         
         CTkLabel(campos_frame,
-                text="Número de carné",
+                text="Numero de carne",
                 font=self.FUENTES["boton"],
                 text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=(10, 5))
         entry_carne = CTkEntry(campos_frame,
-                              width=380,
-                              placeholder_text="Ej: 20240001",
-                              font=self.FUENTES["normal"],
-                              fg_color=COLORES["tarjeta"],
-                              text_color=COLORES["texto"],
-                              border_color=COLORES["borde"])
+                            width=380,
+                            placeholder_text="Ej: 20240001",
+                            font=self.FUENTES["normal"],
+                            fg_color=COLORES["tarjeta"],
+                            text_color=COLORES["texto"],
+                            border_color=COLORES["borde"])
         entry_carne.pack(fill="x", padx=15, pady=5)
         
         CTkLabel(campos_frame,
@@ -857,27 +846,27 @@ class GestorNotasApp(CTk):
                 font=self.FUENTES["boton"],
                 text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=(10, 5))
         entry_grupo = CTkEntry(campos_frame,
-                              width=380,
-                              placeholder_text="1",
-                              font=self.FUENTES["normal"],
-                              fg_color="white",
-                              border_color=COLORES["borde"])
+                            width=380,
+                            placeholder_text="1",
+                            font=self.FUENTES["normal"],
+                            fg_color="white",
+                            border_color=COLORES["borde"])
         entry_grupo.insert(0, "1")
         entry_grupo.pack(fill="x", padx=15, pady=5)
         
         CTkLabel(campos_frame,
-                text="Correo electrónico",
+                text="Correo electronico",
                 font=self.FUENTES["boton"],
                 text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=(10, 5))
         entry_email = CTkEntry(campos_frame,
-                              width=380,
-                              placeholder_text="ejemplo@universidad.ac.cr",
-                              font=self.FUENTES["normal"],
-                              fg_color="white",
-                              border_color=COLORES["borde"])
+                            width=380,
+                            placeholder_text="ejemplo@universidad.ac.cr",
+                            font=self.FUENTES["normal"],
+                            fg_color="white",
+                            border_color=COLORES["borde"])
         entry_email.pack(fill="x", padx=15, pady=(5, 15))
         
-        CTkLabel(frame,
+        CTkLabel(scroll_frame,
                 text="* Campos obligatorios",
                 font=self.FUENTES["pequeña"],
                 text_color=COLORES["texto_secundario"]).pack(pady=5)
@@ -899,7 +888,7 @@ class GestorNotasApp(CTk):
             est_id, error = self.db.agregar_estudiante(self.current_curso, nombre, grupo, email, carne)
             
             if est_id:
-                messagebox.showinfo("Éxito", f"Estudiante '{nombre}' agregado al Grupo {grupo}")
+                messagebox.showinfo("Exito", f"Estudiante '{nombre}' agregado al Grupo {grupo}")
                 dialog.destroy()
                 self.load_estudiantes_notas()
                 self.actualizar_resumen()
@@ -907,13 +896,15 @@ class GestorNotasApp(CTk):
             else:
                 messagebox.showerror("Error", error or "No se pudo agregar el estudiante")
         
-        CTkButton(frame,
-                 text="Guardar Estudiante",
-                 command=guardar,
-                 fg_color=COLORES["exito"],
-                 hover_color="#219A52",
-                 height=40,
-                 font=self.FUENTES["boton"]).pack(pady=15)
+        CTkButton(scroll_frame,
+                text="Guardar Estudiante",
+                command=guardar,
+                fg_color=COLORES["exito"],
+                hover_color="#219A52",
+                height=40,
+                font=self.FUENTES["boton"]).pack(pady=15)
+        
+        self.ajustar_dialogo_responsivo(dialog, scroll_frame, 450, 450)
 
     def agregar_varios_estudiantes(self):
         if not self.current_curso:
@@ -922,24 +913,29 @@ class GestorNotasApp(CTk):
         
         dialog = ctk.CTkToplevel(self)
         dialog.title("Agregar Varios Estudiantes")
-        dialog.geometry("500x500")
         dialog.transient(self)
         dialog.grab_set()
         
-        CTkLabel(dialog, text="Agregar Varios Estudiantes", 
+        # Contenedor con scroll
+        scroll_frame = CTkScrollableFrame(dialog, fg_color=COLORES["fondo"],
+                                        corner_radius=0,
+                                        scrollbar_button_color=COLORES["secundario"])
+        scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        CTkLabel(scroll_frame, text="Agregar Varios Estudiantes", 
                 font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(15, 5))
         
-        CTkLabel(dialog, text="Grupo para todos los estudiantes:", 
+        CTkLabel(scroll_frame, text="Grupo para todos los estudiantes:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=(10, 0))
-        entry_grupo = CTkEntry(dialog, width=100, placeholder_text="1")
+        entry_grupo = CTkEntry(scroll_frame, width=100, placeholder_text="1")
         entry_grupo.insert(0, "1")
         entry_grupo.pack(pady=5)
         
-        CTkLabel(dialog, text="Ingresa los nombres (uno por línea):", 
+        CTkLabel(scroll_frame, text="Ingresa los nombres (uno por linea):", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5))
         
-        text_box = ctk.CTkTextbox(dialog, width=450, height=250)
-        text_box.pack(pady=10, padx=20)
+        text_box = ctk.CTkTextbox(scroll_frame, width=450, height=250)
+        text_box.pack(pady=10, padx=20, fill="both", expand=True)
         
         def guardar():
             try:
@@ -956,18 +952,17 @@ class GestorNotasApp(CTk):
                 if est_id:
                     agregados += 1
             
-            messagebox.showinfo("Éxito", f"{agregados} estudiantes agregados al Grupo {grupo}")
+            messagebox.showinfo("Exito", f"{agregados} estudiantes agregados al Grupo {grupo}")
             dialog.destroy()
             self.load_estudiantes_notas()
             self.actualizar_resumen()
             self.load_cursos()
         
-        CTkButton(dialog, text="Agregar Todos", command=guardar, 
-                 fg_color="green", hover_color="darkgreen",
-                 height=40, font=ctk.CTkFont(weight="bold")).pack(pady=15)
+        CTkButton(scroll_frame, text="Agregar Todos", command=guardar, 
+                fg_color="green", hover_color="darkgreen",
+                height=40, font=ctk.CTkFont(weight="bold")).pack(pady=15)
         
-        # CAMBIO: Agregar ajuste de ventana al final
-        self.ajustar_ventana(dialog, main_frame, min_ancho=500, min_alto=450)
+        self.ajustar_dialogo_responsivo(dialog, scroll_frame, 500, 450)
 
     def editar_estudiante(self):
         if not self.current_curso:
@@ -987,19 +982,24 @@ class GestorNotasApp(CTk):
         
         dialog = ctk.CTkToplevel(self)
         dialog.title("Editar Estudiante")
-        dialog.geometry("500x500")
         dialog.transient(self)
         dialog.grab_set()
         
-        CTkLabel(dialog, text="Selecciona estudiante a editar:", 
+        # Contenedor con scroll
+        scroll_frame = CTkScrollableFrame(dialog, fg_color=COLORES["fondo"],
+                                        corner_radius=0,
+                                        scrollbar_button_color=COLORES["secundario"])
+        scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        CTkLabel(scroll_frame, text="Selecciona estudiante a editar:", 
                 font=ctk.CTkFont(weight="bold")).pack(pady=10)
         
         nombres = [info[0] for info in lista_info]
         est_var = ctk.StringVar(value=nombres[0])
-        menu = CTkOptionMenu(dialog, values=nombres, variable=est_var, width=400)
+        menu = CTkOptionMenu(scroll_frame, values=nombres, variable=est_var, width=400)
         menu.pack(pady=10)
         
-        frame_edit = CTkFrame(dialog)
+        frame_edit = CTkFrame(scroll_frame)
         frame_edit.pack(fill="x", padx=30, pady=10)
         
         entry_nombre_var = ctk.StringVar()
@@ -1026,7 +1026,7 @@ class GestorNotasApp(CTk):
         entry_nombre = CTkEntry(frame_edit, width=400, textvariable=entry_nombre_var)
         entry_nombre.pack(fill="x", pady=2)
         
-        CTkLabel(frame_edit, text="Carné:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10,0))
+        CTkLabel(frame_edit, text="Carne:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10,0))
         entry_carne = CTkEntry(frame_edit, width=400, textvariable=entry_carne_var)
         entry_carne.pack(fill="x", pady=2)
         
@@ -1065,7 +1065,7 @@ class GestorNotasApp(CTk):
             )
             
             if success:
-                messagebox.showinfo("Éxito", "Estudiante actualizado")
+                messagebox.showinfo("Exito", "Estudiante actualizado")
                 dialog.destroy()
                 self.load_estudiantes_notas()
                 self.actualizar_resumen()
@@ -1073,9 +1073,11 @@ class GestorNotasApp(CTk):
             else:
                 messagebox.showerror("Error", error or "No se pudo actualizar")
         
-        CTkButton(dialog, text="Guardar Cambios", command=guardar_cambios,
-                 fg_color="green", hover_color="darkgreen", 
-                 height=40, font=ctk.CTkFont(weight="bold")).pack(pady=20)
+        CTkButton(scroll_frame, text="Guardar Cambios", command=guardar_cambios,
+                fg_color="green", hover_color="darkgreen", 
+                height=40, font=ctk.CTkFont(weight="bold")).pack(pady=20)
+        
+        self.ajustar_dialogo_responsivo(dialog, scroll_frame, 500, 500)
 
     def eliminar_estudiante(self):
         if not self.current_curso:
@@ -1322,32 +1324,23 @@ class GestorNotasApp(CTk):
         
         if not criterios:
             self.mostrar_modal_estudiante_simple(estudiante,
-                mensaje_extra="\n\nEsta evaluación no tiene rúbrica definida.\nUse el botón 'Rúbrica' para crearla.")
+                mensaje_extra="\n\nEsta evaluacion no tiene rubrica definida.\nUse el boton 'Rubrica' para crearla.")
             return
-        
-        altura_por_criterio = 80
-        altura_minima = 500
-        altura_maxima = 800
-        altura_base = 350
-        altura_calculada = min(max(altura_minima, altura_base + (len(criterios) * altura_por_criterio)), altura_maxima)
         
         modal = ctk.CTkToplevel(self)
         modal.title(f"Calificar: {nombre}")
-        modal.geometry(f"600x{altura_calculada}")
         modal.transient(self)
         modal.grab_set()
         
-        modal.update_idletasks()
-        x = (modal.winfo_screenwidth() // 2) - (600 // 2)
-        y = (modal.winfo_screenheight() // 2) - (altura_calculada // 2)
-        modal.geometry(f"600x{altura_calculada}+{x}+{y}")
+        # Contenedor con scroll
+        main_scroll = CTkScrollableFrame(modal, fg_color=COLORES["fondo"],
+                                        corner_radius=0,
+                                        scrollbar_button_color=COLORES["secundario"])
+        main_scroll.pack(fill="both", expand=True, padx=10, pady=10)
         
-        main_frame = CTkFrame(modal, fg_color=COLORES["fondo"])
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        header_frame = CTkFrame(main_frame,
-                               fg_color=COLORES["primario"],
-                               corner_radius=8)
+        header_frame = CTkFrame(main_scroll,
+                            fg_color=COLORES["primario"],
+                            corner_radius=8)
         header_frame.pack(fill="x", pady=(0, 10))
         
         CTkLabel(header_frame,
@@ -1355,19 +1348,19 @@ class GestorNotasApp(CTk):
                 font=self.FUENTES["subtitulo"],
                 text_color="white").pack(pady=12)
         
-        info_frame = CTkFrame(main_frame,
-                             fg_color=COLORES["tarjeta"],
-                             corner_radius=6)
+        info_frame = CTkFrame(main_scroll,
+                            fg_color=COLORES["tarjeta"],
+                            corner_radius=6)
         info_frame.pack(fill="x", pady=5)
         
-        info_text = f"Grupo: {grupo}  |  Carné: {carne or 'N/A'}  |  Email: {email or 'N/A'}"
+        info_text = f"Grupo: {grupo}  |  Carne: {carne or 'N/A'}  |  Email: {email or 'N/A'}"
         
         CTkLabel(info_frame,
                 text=info_text,
                 font=self.FUENTES["pequeña"],
                 text_color=COLORES["texto_secundario"]).pack(pady=8)
         
-        title_frame = CTkFrame(main_frame, fg_color="transparent")
+        title_frame = CTkFrame(main_scroll, fg_color="transparent")
         title_frame.pack(fill="x", pady=10)
         
         CTkLabel(title_frame,
@@ -1375,16 +1368,14 @@ class GestorNotasApp(CTk):
                 font=self.FUENTES["subtitulo"],
                 text_color=COLORES["texto"]).pack(side="left", padx=5)
         CTkLabel(title_frame,
-                text=f"(Máx: {puntos_max_eval} pts)",
+                text=f"(Max: {puntos_max_eval} pts)",
                 font=self.FUENTES["normal"],
                 text_color=COLORES["texto_secundario"]).pack(side="left", padx=5)
         
-        altura_scroll = max(200, altura_calculada - 300)
-        
-        scroll_rubrica = CTkScrollableFrame(main_frame,
-                                           fg_color=COLORES["tarjeta"],
-                                           height=altura_scroll,
-                                           corner_radius=8)
+        scroll_rubrica = CTkScrollableFrame(main_scroll,
+                                        fg_color=COLORES["tarjeta"],
+                                        height=300,
+                                        corner_radius=8)
         scroll_rubrica.pack(fill="both", expand=True, pady=5)
         
         calificaciones_previas = self.db.get_calificaciones_rubrica_estudiante(est_id, self.current_evaluacion)
@@ -1395,8 +1386,8 @@ class GestorNotasApp(CTk):
             crit_id, nombre_criterio, puntos_max, puntos_obtenidos, obs = crit
             
             frame_crit = CTkFrame(scroll_rubrica,
-                                 fg_color=COLORES["fondo"],
-                                 corner_radius=6)
+                                fg_color=COLORES["fondo"],
+                                corner_radius=6)
             frame_crit.pack(fill="x", pady=4, padx=2)
             
             header_crit = CTkFrame(frame_crit, fg_color="transparent")
@@ -1407,7 +1398,7 @@ class GestorNotasApp(CTk):
                     font=self.FUENTES["boton"],
                     text_color=COLORES["texto"]).pack(side="left")
             CTkLabel(header_crit,
-                    text=f"(máx: {puntos_max})",
+                    text=f"(max: {puntos_max})",
                     font=self.FUENTES["pequeña"],
                     text_color=COLORES["texto_secundario"]).pack(side="left", padx=5)
             
@@ -1416,14 +1407,14 @@ class GestorNotasApp(CTk):
             
             var_puntos = ctk.StringVar(value=str(puntos_obtenidos) if puntos_obtenidos > 0 else "")
             entry_puntos = CTkEntry(input_frame,
-                                   width=70,
-                                   height=28,
-                                   textvariable=var_puntos,
-                                   placeholder_text=f"0-{puntos_max}",
-                                   font=self.FUENTES["normal"],
-                                   fg_color=COLORES["tarjeta"],
-                                   text_color=COLORES["texto"],
-                                   border_color=COLORES["borde"])
+                                width=70,
+                                height=28,
+                                textvariable=var_puntos,
+                                placeholder_text=f"0-{puntos_max}",
+                                font=self.FUENTES["normal"],
+                                fg_color=COLORES["tarjeta"],
+                                text_color=COLORES["texto"],
+                                border_color=COLORES["borde"])
             entry_puntos.pack(side="left", padx=2)
             
             CTkLabel(input_frame,
@@ -1454,9 +1445,9 @@ class GestorNotasApp(CTk):
                 'nombre': nombre_criterio
             }
         
-        bottom_frame = CTkFrame(main_frame,
-                               fg_color=COLORES["tarjeta"],
-                               corner_radius=8)
+        bottom_frame = CTkFrame(main_scroll,
+                            fg_color=COLORES["tarjeta"],
+                            corner_radius=8)
         bottom_frame.pack(fill="x", pady=10)
         
         lbl_total = CTkLabel(bottom_frame,
@@ -1503,7 +1494,7 @@ class GestorNotasApp(CTk):
                     
                     if puntos > entries['max']:
                         messagebox.showerror("Error",
-                            f"'{entries['nombre']}': máximo {entries['max']} puntos")
+                            f"'{entries['nombre']}': maximo {entries['max']} puntos")
                         return
                     
                     self.db.guardar_calificacion_rubrica(est_id, crit_id, puntos, obs)
@@ -1511,10 +1502,10 @@ class GestorNotasApp(CTk):
                 
                 if total > puntos_max_eval:
                     messagebox.showerror("Error",
-                        f"Total ({total}) excede el máximo ({puntos_max_eval})")
+                        f"Total ({total}) excede el maximo ({puntos_max_eval})")
                     return
                 
-                self.db.guardar_nota(est_id, self.current_evaluacion, total, "Calificado por rúbrica")
+                self.db.guardar_nota(est_id, self.current_evaluacion, total, "Calificado por rubrica")
                 
                 self.load_estudiantes_notas()
                 self.actualizar_resumen()
@@ -1530,51 +1521,50 @@ class GestorNotasApp(CTk):
                 messagebox.showerror("Error", f"No se pudo guardar: {str(e)}")
         
         CTkButton(btn_frame,
-                 text="GUARDAR",
-                 command=aceptar_y_guardar,
-                 fg_color=COLORES["exito"],
-                 hover_color="#219A52",
-                 height=40,
-                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
+                text="GUARDAR",
+                command=aceptar_y_guardar,
+                fg_color=COLORES["exito"],
+                hover_color="#219A52",
+                height=40,
+                font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
         
         CTkButton(btn_frame,
-                 text="Cancelar",
-                 command=modal.destroy,
-                 fg_color=COLORES["secundario"],
-                 hover_color=COLORES["primario"],
-                 height=40,
-                 font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
+                text="Cancelar",
+                command=modal.destroy,
+                fg_color=COLORES["secundario"],
+                hover_color=COLORES["primario"],
+                height=40,
+                font=self.FUENTES["boton"]).pack(side="left", padx=5, fill="x", expand=True)
+        
+        self.ajustar_dialogo_responsivo(modal, main_scroll, 600, 500)
 
     def mostrar_modal_estudiante_simple(self, estudiante, mensaje_extra=""):
         est_id, nombre, grupo, email, carne = estudiante
         
         modal = ctk.CTkToplevel(self)
         modal.title("Datos del Estudiante")
-        modal.geometry("400x300")
         modal.transient(self)
         modal.grab_set()
         
-        modal.update_idletasks()
-        x = (modal.winfo_screenwidth() // 2) - (400 // 2)
-        y = (modal.winfo_screenheight() // 2) - (300 // 2)
-        modal.geometry(f"400x300+{x}+{y}")
+        # Contenedor con scroll
+        scroll_frame = CTkScrollableFrame(modal, fg_color=COLORES["fondo"],
+                                        corner_radius=0,
+                                        scrollbar_button_color=COLORES["secundario"])
+        scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        frame = CTkFrame(modal, fg_color=COLORES["fondo"])
-        frame.pack(fill="both", expand=True, padx=15, pady=15)
-        
-        CTkLabel(frame,
-                text="INFORMACIÓN DEL ESTUDIANTE",
+        CTkLabel(scroll_frame,
+                text="INFORMACION DEL ESTUDIANTE",
                 font=self.FUENTES["subtitulo"],
                 text_color=COLORES["texto"]).pack(pady=(15, 10))
         
-        CTkLabel(frame,
+        CTkLabel(scroll_frame,
                 text=nombre,
                 font=self.FUENTES["titulo"],
                 text_color=COLORES["primario"]).pack()
         
-        datos_frame = CTkFrame(frame,
-                              fg_color=COLORES["tarjeta"],
-                              corner_radius=8)
+        datos_frame = CTkFrame(scroll_frame,
+                            fg_color=COLORES["tarjeta"],
+                            corner_radius=8)
         datos_frame.pack(fill="x", padx=20, pady=15)
         
         CTkLabel(datos_frame,
@@ -1582,7 +1572,7 @@ class GestorNotasApp(CTk):
                 font=self.FUENTES["normal"],
                 text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=5)
         CTkLabel(datos_frame,
-                text=f"Carné: {carne or 'No registrado'}",
+                text=f"Carne: {carne or 'No registrado'}",
                 font=self.FUENTES["normal"],
                 text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=5)
         CTkLabel(datos_frame,
@@ -1591,18 +1581,21 @@ class GestorNotasApp(CTk):
                 text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=5)
         
         if mensaje_extra:
-            CTkLabel(frame,
+            CTkLabel(scroll_frame,
                     text=mensaje_extra,
                     font=self.FUENTES["pequeña"],
                     text_color=COLORES["alerta"]).pack(pady=10)
         
-        CTkButton(frame,
-                 text="Cerrar",
-                 command=modal.destroy,
-                 fg_color=COLORES["acento"],
-                 hover_color="#2980B9",
-                 height=35,
-                 font=self.FUENTES["boton"]).pack(pady=15)
+        CTkButton(scroll_frame,
+                text="Cerrar",
+                command=modal.destroy,
+                fg_color=COLORES["acento"],
+                hover_color="#2980B9",
+                height=35,
+                font=self.FUENTES["boton"]).pack(pady=15)
+        
+        self.ajustar_dialogo_responsivo(modal, scroll_frame, 400, 300)
+
 
     def guardar_nota_auto(self, estudiante_id, nota_var, obs_var, estado_label, puntos_maximos=None):
         """Guarda nota automáticamente validando que no exceda el máximo de la evaluación"""
@@ -2700,22 +2693,23 @@ class GestorNotasApp(CTk):
         
         dialog = ctk.CTkToplevel(self)
         dialog.title("Registro de Asistencia")
-        dialog.geometry("900x700")
         dialog.transient(self)
         dialog.grab_set()
         
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (900 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (700 // 2)
-        dialog.geometry(f"900x700+{x}+{y}")
-        
+        # Configurar grid del dialog para expandir
         dialog.grid_columnconfigure(0, weight=1)
-        dialog.grid_columnconfigure(1, weight=2)
         dialog.grid_rowconfigure(0, weight=1)
         
-        left_frame = CTkFrame(dialog,
-                             fg_color=COLORES["fondo"],
-                             corner_radius=10)
+        # Frame contenedor con scroll
+        main_scroll = CTkScrollableFrame(dialog, fg_color=COLORES["tarjeta"],
+                                        corner_radius=0,
+                                        scrollbar_button_color=COLORES["secundario"])
+        main_scroll.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+        main_scroll.grid_columnconfigure(0, weight=3)
+        main_scroll.grid_columnconfigure(1, weight=1)
+        main_scroll.grid_rowconfigure(0, weight=1)
+        
+        left_frame = CTkFrame(main_scroll, fg_color=COLORES["fondo"], corner_radius=10)
         left_frame.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
         left_frame.grid_rowconfigure(5, weight=1)
         
@@ -2740,14 +2734,14 @@ class GestorNotasApp(CTk):
         self.grupo_asistencia_var = ctk.StringVar(value=self.grupo_clase_var.get())
         
         combo_grupo_asistencia = CTkOptionMenu(grupo_frame, 
-                                              values=["1", "2", "3", "4", "5"],
-                                              variable=self.grupo_asistencia_var,
-                                              width=80,
-                                              command=lambda x: [self.cargar_estudiantes_asistencia(cal.get_date()), self.guardar_asistencia_auto()],
-                                              fg_color=COLORES["secundario"],
-                                              button_color=COLORES["primario"],
-                                              text_color="white",
-                                              font=self.FUENTES["normal"])
+                                            values=["1", "2", "3", "4", "5"],
+                                            variable=self.grupo_asistencia_var,
+                                            width=80,
+                                            command=lambda x: [self.cargar_estudiantes_asistencia(cal.get_date()), self.guardar_asistencia_auto()],
+                                            fg_color=COLORES["secundario"],
+                                            button_color=COLORES["primario"],
+                                            text_color="white",
+                                            font=self.FUENTES["normal"])
         combo_grupo_asistencia.pack(side="left", padx=5)
         
         separador = CTkFrame(left_frame, height=2, fg_color=COLORES["borde"])
@@ -2765,66 +2759,64 @@ class GestorNotasApp(CTk):
             year, month, day = hoy.year, hoy.month, hoy.day
         
         cal = Calendar(cal_frame, 
-                      selectmode='day', 
-                      year=year, 
-                      month=month, 
-                      day=day,
-                      locale='es_ES', 
-                      font="Arial 10",
-                      background=COLORES["primario"],
-                      foreground='white',
-                      selectbackground=COLORES["acento"],
-                      selectforeground='white')
+                    selectmode='day', 
+                    year=year, 
+                    month=month, 
+                    day=day,
+                    locale='es_ES', 
+                    font="Arial 10",
+                    background=COLORES["primario"],
+                    foreground='white',
+                    selectbackground=COLORES["acento"],
+                    selectforeground='white')
         cal.pack(pady=5)
         
         fecha_label = CTkLabel(left_frame, 
-                              text=f"Fecha: {cal.get_date()}",
-                              font=self.FUENTES["normal"],
-                              text_color=COLORES["texto"])
+                            text=f"Fecha: {cal.get_date()}",
+                            font=self.FUENTES["normal"],
+                            text_color=COLORES["texto"])
         fecha_label.pack(pady=10)
         
         btn_frame = CTkFrame(left_frame, fg_color="transparent")
         btn_frame.pack(pady=10, fill="x", padx=10)
         
         CTkButton(btn_frame, 
-                 text="Todos Presentes",
-                 command=lambda: [self.marcar_todos_asistencia("presente"), self.guardar_asistencia_auto()],
-                 fg_color=COLORES["exito"],
-                 hover_color="#219A52",
-                 font=self.FUENTES["boton"],
-                 height=35).pack(pady=2, fill="x")
+                text="Todos Presentes",
+                command=lambda: [self.marcar_todos_asistencia("presente"), self.guardar_asistencia_auto()],
+                fg_color=COLORES["exito"],
+                hover_color="#219A52",
+                font=self.FUENTES["boton"],
+                height=35).pack(pady=2, fill="x")
         CTkButton(btn_frame, 
-                 text="Todos Ausentes",
-                 command=lambda: [self.marcar_todos_asistencia("ausente"), self.guardar_asistencia_auto()],
-                 fg_color=COLORES["peligro"],
-                 hover_color="#A93226",
-                 font=self.FUENTES["boton"],
-                 height=35).pack(pady=2, fill="x")
+                text="Todos Ausentes",
+                command=lambda: [self.marcar_todos_asistencia("ausente"), self.guardar_asistencia_auto()],
+                fg_color=COLORES["peligro"],
+                hover_color="#A93226",
+                font=self.FUENTES["boton"],
+                height=35).pack(pady=2, fill="x")
         CTkButton(btn_frame, 
-                 text="Limpiar Todo",
-                 command=lambda: [self.marcar_todos_asistencia("sin_marcar"), self.guardar_asistencia_auto()],
-                 fg_color=COLORES["secundario"],
-                 hover_color=COLORES["primario"],
-                 font=self.FUENTES["boton"],
-                 height=35).pack(pady=2, fill="x")
+                text="Limpiar Todo",
+                command=lambda: [self.marcar_todos_asistencia("sin_marcar"), self.guardar_asistencia_auto()],
+                fg_color=COLORES["secundario"],
+                hover_color=COLORES["primario"],
+                font=self.FUENTES["boton"],
+                height=35).pack(pady=2, fill="x")
         
         CTkButton(left_frame, 
-                 text="Cerrar (Guardado automático)",
-                 command=lambda: [self.guardar_asistencia_auto(), dialog.destroy()],
-                 fg_color=COLORES["acento"],
-                 hover_color="#2980B9",
-                 height=50,
-                 font=self.FUENTES["boton"]).pack(pady=20, fill="x", padx=10)
+                text="Cerrar (Guardado automatico)",
+                command=lambda: [self.guardar_asistencia_auto(), dialog.destroy()],
+                fg_color=COLORES["acento"],
+                hover_color="#2980B9",
+                height=50,
+                font=self.FUENTES["boton"]).pack(pady=20, fill="x", padx=10)
         
         self.stats_label = CTkLabel(left_frame, 
-                                   text="Estadísticas: -",
-                                   font=self.FUENTES["normal"],
-                                   text_color=COLORES["texto_secundario"])
+                                text="Estadisticas: -",
+                                font=self.FUENTES["normal"],
+                                text_color=COLORES["texto_secundario"])
         self.stats_label.pack(pady=10)
         
-        right_frame = CTkFrame(dialog,
-                              fg_color=COLORES["tarjeta"],
-                              corner_radius=10)
+        right_frame = CTkFrame(main_scroll, fg_color=COLORES["tarjeta"], corner_radius=10)
         right_frame.grid(row=0, column=1, sticky="nsew", padx=(0, 15), pady=15)
         right_frame.grid_rowconfigure(1, weight=1)
         
@@ -2839,9 +2831,9 @@ class GestorNotasApp(CTk):
                 text_color=COLORES["texto_secundario"]).pack()
         
         self.asistencia_scroll = CTkScrollableFrame(right_frame,
-                                                   fg_color=COLORES["fondo"],
-                                                   height=550,
-                                                   corner_radius=6)
+                                                fg_color=COLORES["fondo"],
+                                                height=550,
+                                                corner_radius=6)
         self.asistencia_scroll.pack(fill="both", expand=True, padx=10, pady=10)
         
         self.checkboxes_asistencia = {}
@@ -2864,9 +2856,8 @@ class GestorNotasApp(CTk):
             dialog.destroy()
         
         dialog.protocol("WM_DELETE_WINDOW", on_closing)
-
-        dialog.update_idletasks()
-        self.ajustar_ventana(dialog, dialog, min_ancho=900, min_alto=700)
+        
+        self.ajustar_dialogo_responsivo(dialog, main_scroll, 900, 700)
 
     def cargar_estudiantes_asistencia(self, fecha_str):
         for widget in self.asistencia_scroll.winfo_children():
