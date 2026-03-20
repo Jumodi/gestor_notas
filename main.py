@@ -99,6 +99,42 @@ class GestorNotasApp(CTk):
         self.load_cursos()
         self.after(1000, self.verificar_sincronizacion_inicio)
 
+    def ajustar_ventana(self, dialog, contenido_frame, min_ancho=600, min_alto=400, 
+                    max_ancho_pantalla=0.9, max_alto_pantalla=0.85):
+        """
+        Ajusta la ventana al tamaño óptimo del contenido, respetando límites de pantalla.
+        """
+        # Actualizar geometría para calcular tamaño real del contenido
+        dialog.update_idletasks()
+        contenido_frame.update_idletasks()
+        
+        # Obtener tamaño requerido por el contenido
+        req_ancho = contenido_frame.winfo_reqwidth() + 40  # + padding
+        req_alto = contenido_frame.winfo_reqheight() + 80  # + padding + título/botones
+        
+        # Obtener tamaño de la pantalla
+        screen_ancho = dialog.winfo_screenwidth()
+        screen_alto = dialog.winfo_screenheight()
+        
+        # Calcular límites máximos
+        max_ancho = int(screen_ancho * max_ancho_pantalla)
+        max_alto = int(screen_alto * max_alto_pantalla)
+        
+        # Aplicar límites
+        ancho_final = max(min_ancho, min(req_ancho, max_ancho))
+        alto_final = max(min_alto, min(req_alto, max_alto))
+        
+        # Centrar en pantalla (CORREGIDO: usar screen_alto para y)
+        x = (screen_ancho - ancho_final) // 2
+        y = (screen_alto - alto_final) // 2
+        
+        # Aplicar geometría
+        dialog.geometry(f"{ancho_final}x{alto_final}+{x}+{y}")
+        dialog.minsize(min_ancho, min_alto)
+        
+        # Retornar si necesita scroll
+        return req_alto > max_alto or req_ancho > max_ancho
+
     def sincronizar_manual(self):
         """Abre dialogo de sincronizacion por archivo compartido"""
         dialog = ctk.CTkToplevel(self)
@@ -243,6 +279,8 @@ class GestorNotasApp(CTk):
         
         CTkButton(dialog, text="Cerrar", command=dialog.destroy, 
                  fg_color="gray").pack(pady=20)
+        
+        self.ajustar_ventana(dialog, main_frame, min_ancho=550, min_alto=500)
 
     def verificar_sincronizacion_inicio(self):
         """Verifica el estado de sincronizacion al iniciar la aplicacion"""
@@ -833,7 +871,7 @@ class GestorNotasApp(CTk):
                 text_color=COLORES["texto"]).pack(anchor="w", padx=15, pady=(10, 5))
         entry_email = CTkEntry(campos_frame,
                               width=380,
-                              placeholder_text="ejemplo@universidad.edu",
+                              placeholder_text="ejemplo@universidad.ac.cr",
                               font=self.FUENTES["normal"],
                               fg_color="white",
                               border_color=COLORES["borde"])
@@ -927,6 +965,9 @@ class GestorNotasApp(CTk):
         CTkButton(dialog, text="Agregar Todos", command=guardar, 
                  fg_color="green", hover_color="darkgreen",
                  height=40, font=ctk.CTkFont(weight="bold")).pack(pady=15)
+        
+        # CAMBIO: Agregar ajuste de ventana al final
+        self.ajustar_ventana(dialog, main_frame, min_ancho=500, min_alto=450)
 
     def editar_estudiante(self):
         if not self.current_curso:
@@ -1846,6 +1887,7 @@ class GestorNotasApp(CTk):
                                fg_color=COLORES["primario"])
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_rowconfigure(0, weight=1)
+        self.sidebar.grid_columnconfigure(0, weight=1)
         self.sidebar.grid_propagate(False)
         
         self.sidebar_scroll = CTkScrollableFrame(self.sidebar, width=300, 
@@ -2822,6 +2864,9 @@ class GestorNotasApp(CTk):
             dialog.destroy()
         
         dialog.protocol("WM_DELETE_WINDOW", on_closing)
+
+        dialog.update_idletasks()
+        self.ajustar_ventana(dialog, dialog, min_ancho=900, min_alto=700)
 
     def cargar_estudiantes_asistencia(self, fecha_str):
         for widget in self.asistencia_scroll.winfo_children():
