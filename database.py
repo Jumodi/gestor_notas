@@ -46,6 +46,11 @@ class DatabaseManager:
             cursor.execute("ALTER TABLE clases ADD COLUMN grupo INTEGER DEFAULT 1")
         except sqlite3.OperationalError:
             pass
+
+        try:
+            cursor.execute("ALTER TABLE clases ADD COLUMN contenido_tags TEXT")
+        except sqlite3.OperationalError:
+            pass
         
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS evaluaciones (
@@ -698,6 +703,31 @@ class DatabaseManager:
             "links": links
         }
     
+    def guardar_tags_clase(self, clase_id, tags_json):
+        """Guarda los tags de formato del contenido de una clase"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE clases SET contenido_tags = ?, fecha_modificacion = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (tags_json, clase_id))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def get_tags_clase(self, clase_id):
+        """Obtiene los tags de formato de una clase"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT contenido_tags FROM clases WHERE id = ?', (clase_id,))
+        resultado = cursor.fetchone()
+        conn.close()
+        return resultado[0] if resultado and resultado[0] else None
+
     def agregar_link_clase(self, clase_id, nombre, url):
         """Agrega un enlace a una clase"""
         conn = self.get_connection()

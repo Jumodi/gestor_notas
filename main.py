@@ -2439,6 +2439,23 @@ class GestorNotasApp(CTk):
         observaciones = self.entry_observaciones.get().strip()
         contenido = self.texto_clase.get("1.0", "end").strip()
         
+        # Extraer tags de formato para guardar
+        import json
+        tags_data = []
+        for tag_name in ["bold", "italic", "underline"]:
+            ranges = self.texto_clase.tag_ranges(tag_name)
+            for i in range(0, len(ranges), 2):
+                if i + 1 < len(ranges):
+                    start = str(ranges[i])
+                    end = str(ranges[i + 1])
+                    tags_data.append({
+                        "tag": tag_name,
+                        "start": start,
+                        "end": end
+                    })
+        
+        tags_json = json.dumps(tags_data) if tags_data else None
+        
         links = []
         for nombre_entry, url_entry in self.links_entries:
             try:
@@ -2486,12 +2503,16 @@ class GestorNotasApp(CTk):
                     raise Exception(error)
                 self.db.eliminar_links_clase(self.clase_actual_id)
             
+            # Guardar tags de formato si existen
+            if self.clase_actual_id and tags_json:
+                self.db.guardar_tags_clase(self.clase_actual_id, tags_json)
+            
             if self.clase_actual_id and links:
                 for link in links:
                     self.db.agregar_link_clase(self.clase_actual_id, link["nombre"], link["url"])
             
             if not silencioso:
-                messagebox.showinfo("Éxito", f"Clase guardada correctamente:\n{encabezado[:50]}")
+                messagebox.showinfo("Exito", f"Clase guardada correctamente:\n{encabezado[:50]}")
                 self.status_clases_label.configure(text=f"Guardado: {encabezado[:30]}...")
                 self.cargar_lista_clases()
                 
@@ -2560,9 +2581,6 @@ class GestorNotasApp(CTk):
             self.grupo_clase_var.set(str(grupo_guardado))
             self.lbl_info_grupo_clase.configure(text=f"Clases para Grupo {grupo_guardado}")
             
-            self.entry_encabezado_clase.delete(0, "end")
-            self.entry_encabezado_clase.insert(0, clase_data.get("encabezado", ""))
-
             fecha_guardada = clase_data.get("fecha_clase")
             if fecha_guardada:
                 self.fecha_clase_var.set(fecha_guardada)
@@ -2583,6 +2601,28 @@ class GestorNotasApp(CTk):
             
             self.texto_clase.delete("1.0", "end")
             self.texto_clase.insert("1.0", clase_data.get("contenido", ""))
+            
+            # Aplicar tags de formato si existen
+            tags_json = self.db.get_tags_clase(clase_id)
+            if tags_json:
+                import json
+                try:
+                    tags_list = json.loads(tags_json)
+                    for tag_info in tags_list:
+                        tag_name = tag_info.get("tag")
+                        start = tag_info.get("start")
+                        end = tag_info.get("end")
+                        
+                        if tag_name == "bold":
+                            self.texto_clase.tag_configure("bold", font=("Segoe UI", 12, "bold"))
+                        elif tag_name == "italic":
+                            self.texto_clase.tag_configure("italic", font=("Segoe UI", 12, "italic"))
+                        elif tag_name == "underline":
+                            self.texto_clase.tag_configure("underline", underline=True)
+                        
+                        self.texto_clase.tag_add(tag_name, start, end)
+                except:
+                    pass
             
             for widget in self.frame_links.winfo_children():
                 widget.destroy()
@@ -3154,8 +3194,8 @@ class GestorNotasApp(CTk):
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
         
         doc = SimpleDocTemplate(filepath, pagesize=letter,
-                               rightMargin=72, leftMargin=72,
-                               topMargin=72, bottomMargin=18)
+                            rightMargin=72, leftMargin=72,
+                            topMargin=72, bottomMargin=18)
         
         elementos = []
         
@@ -3197,7 +3237,7 @@ class GestorNotasApp(CTk):
         elementos.append(Spacer(1, 0.2*inch))
         
         if topicos:
-            elementos.append(Paragraph("<b>TOPICOS A TRATAR:</b>", estilo_subtitulo))
+            elementos.append(Paragraph("<b>TÓPICOS:</b>", estilo_subtitulo))
             elementos.append(Paragraph(topicos.replace('\n', '<br/>'), estilo_normal))
             elementos.append(Spacer(1, 0.2*inch))
         
@@ -3234,8 +3274,25 @@ class GestorNotasApp(CTk):
         
         if contenido:
             elementos.append(Paragraph("<b>DESARROLLO DE LA CLASE:</b>", estilo_subtitulo))
-            contenido_html = contenido.replace('\n', '<br/>')
-            elementos.append(Paragraph(contenido_html, estilo_normal))
+            
+            # Obtener tags de formato si la clase esta guardada
+            tags_json = None
+            if hasattr(self, 'clase_actual_id') and self.clase_actual_id:
+                tags_json = self.db.get_tags_clase(self.clase_actual_id)
+            
+            if tags_json:
+                import json
+                try:
+                    tags_list = json.loads(tags_json)
+                    contenido_html = self.convertir_a_html_con_tags(contenido, tags_list)
+                    elementos.append(Paragraph(contenido_html, estilo_normal))
+                except:
+                    contenido_html = contenido.replace('\n', '<br/>')
+                    elementos.append(Paragraph(contenido_html, estilo_normal))
+            else:
+                contenido_html = contenido.replace('\n', '<br/>')
+                elementos.append(Paragraph(contenido_html, estilo_normal))
+            
             elementos.append(Spacer(1, 0.2*inch))
         
         if observaciones:
@@ -3347,6 +3404,85 @@ class GestorNotasApp(CTk):
             
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo crear el PDF:\n{str(e)}")
+
+    def convertir_a_html_con_tags(self, texto, tags_list):
+        """Convierte texto plano con posiciones de tags a HTML"""
+        import json
+        
+        # Ordenar eventos por posicion
+        eventos = []
+        for tag in tags_list:
+            start = tag.get("start")
+            end = tag.get("end")
+            tag_name = tag.get("tag")
+            
+            start_idx = self.tk_index_a_pos(texto, start)
+            end_idx = self.tk_index_a_pos(texto, end)
+            
+            eventos.append((start_idx, "abrir", tag_name))
+            eventos.append((end_idx, "cerrar", tag_name))
+        
+        eventos.sort(key=lambda x: x[0])
+        
+        # Construir HTML
+        html = ""
+        pos_actual = 0
+        pila_tags = []
+        
+        for pos, accion, tag in eventos:
+            if pos > pos_actual:
+                html += self.escape_html(texto[pos_actual:pos])
+                pos_actual = pos
+            
+            if accion == "abrir":
+                if tag == "bold":
+                    html += "<b>"
+                elif tag == "italic":
+                    html += "<i>"
+                elif tag == "underline":
+                    html += "<u>"
+                pila_tags.append(tag)
+            else:
+                if pila_tags and pila_tags[-1] == tag:
+                    pila_tags.pop()
+                    if tag == "bold":
+                        html += "</b>"
+                    elif tag == "italic":
+                        html += "</i>"
+                    elif tag == "underline":
+                        html += "</u>"
+        
+        if pos_actual < len(texto):
+            html += self.escape_html(texto[pos_actual:])
+        
+        html = html.replace('\n', '<br/>')
+        return html
+
+    def tk_index_a_pos(self, texto, tk_index):
+        """Convierte indice tkinter (linea.columna) a posicion de caracteres absoluta"""
+        try:
+            linea, columna = tk_index.split('.')
+            linea = int(linea)
+            columna = int(columna)
+            
+            lineas = texto.split('\n')
+            pos = 0
+            for i in range(linea - 1):
+                if i < len(lineas):
+                    pos += len(lineas[i]) + 1
+            
+            pos += columna
+            return min(pos, len(texto))
+        except:
+            return 0
+
+    def escape_html(self, texto):
+        """Escapa caracteres especiales de HTML"""
+        return (texto
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace('"', "&quot;"))
 
 if __name__ == "__main__":
     app = GestorNotasApp()
